@@ -1,0 +1,380 @@
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut } from 'lucide-react';
+
+const serviceDurations = {
+  'unas-gel': { duracion: 60, nombre: 'Uñas de Gel', precio: 450 },
+  'unas-acrilicas': { duracion: 90, nombre: 'Uñas Acrílicas', precio: 600 },
+  'pedicure': { duracion: 90, nombre: 'Pedicure Premium', precio: 500 },
+  'keratina': { duracion: 180, nombre: 'Tratamiento de Keratina', precio: 1200 },
+  'tinte': { duracion: 180, nombre: 'Tinte Profesional', precio: 800 },
+  'pestanas': { duracion: 60, nombre: 'Extensión de Pestañas', precio: 900 },
+  'cejas': { duracion: 30, nombre: 'Diseño de Cejas', precio: 350 },
+};
+
+const Reservaciones = () => {
+  const { user, token, logout, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
+  const [selectedService, setSelectedService] = useState('');
+  const [reservas, setReservas] = useState([]);
+  const [misReservas, setMisReservas] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    }
+  }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (selectedService) {
+      cargarDisponibilidad();
+    }
+    cargarMisReservas();
+  }, [currentWeekStart, selectedService]);
+
+  const cargarDisponibilidad = async () => {
+    try {
+      const fechaISO = currentWeekStart.toISOString().split('T')[0];
+      const response = await fetch(
+        `http://localhost:5000/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      const data = await response.json();
+      setReservas(data);
+    } catch (err) {
+      console.error('Error cargando disponibilidad:', err);
+    }
+  };
+
+  const cargarMisReservas = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/reservations/my-reservations', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      setMisReservas(data);
+    } catch (err) {
+      console.error('Error cargando mis reservas:', err);
+    }
+  };
+
+  const generarHorarios = () => {
+    const horarios = [];
+    for (let h = 10; h < 20; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        const hora = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        horarios.push(hora);
+      }
+    }
+    return horarios;
+  };
+
+  const generarDiasSemana = () => {
+    const dias = [];
+    const inicio = new Date(currentWeekStart);
+    inicio.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < 7; i++) {
+      const fecha = new Date(inicio);
+      fecha.setDate(inicio.getDate() + i);
+      dias.push(fecha);
+    }
+    return dias;
+  };
+
+  const estaOcupado = (fecha, hora) => {
+    return reservas.some((reserva) => {
+      const fechaReserva = new Date(reserva.fecha).toDateString();
+      const fechaSeleccionada = fecha.toDateString();
+      return (
+        fechaReserva === fechaSeleccionada &&
+        reserva.horaInicio <= hora &&
+        reserva.horaFin > hora
+      );
+    });
+  };
+
+  const agendarCita = async (fecha, hora) => {
+    if (!selectedService) {
+      setError('Por favor selecciona un servicio primero');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const fechaISO = fecha.toISOString().split('T')[0];
+      const response = await fetch('http://localhost:5000/api/reservations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          servicio: selectedService,
+          fecha: fechaISO,
+          horaInicio: hora,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message);
+      }
+
+      alert('¡Cita agendada exitosamente! Recibirás un mensaje de confirmación por WhatsApp.');
+      cargarDisponibilidad();
+      cargarMisReservas();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cambiarSemana = (direccion) => {
+    const nuevaFecha = new Date(currentWeekStart);
+    nuevaFecha.setDate(nuevaFecha.getDate() + direccion * 7);
+    setCurrentWeekStart(nuevaFecha);
+  };
+
+  const cancelarReserva = async (reservaId) => {
+    if (!confirm('¿Estás segura de que deseas cancelar esta cita?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:5000/api/reservations/${reservaId}/cancel`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        alert('Cita cancelada exitosamente');
+        cargarMisReservas();
+        cargarDisponibilidad();
+      }
+    } catch (err) {
+      alert('Error al cancelar la cita');
+    }
+  };
+
+  const horarios = generarHorarios();
+  const diasSemana = generarDiasSemana();
+
+  return (
+    <div className="min-h-screen bg-crema dark:bg-negro">
+      {/* Header */}
+      <div className="bg-rosa shadow-lg" style={{ marginTop: '300px' }}>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-alex-brush text-white">Reservaciones</h1>
+              <p className="text-white/80">Hola, {user?.nombreCompleto}</p>
+            </div>
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 bg-white text-rosa px-4 py-2 rounded-lg hover:bg-crema transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Cerrar Sesión
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-8">
+        {/* Selector de Servicio */}
+        <div className="bg-white dark:bg-negro-claro rounded-xl shadow-lg p-6 mb-8">
+          <h2 className="text-2xl font-alex-brush text-rosa mb-4">Selecciona un servicio</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Object.entries(serviceDurations).map(([key, value]) => (
+              <button
+                key={key}
+                onClick={() => setSelectedService(key)}
+                className={`p-4 rounded-lg border-2 transition-all ${
+                  selectedService === key
+                    ? 'border-rosa bg-rosa/10'
+                    : 'border-gris-claro hover:border-rosa'
+                }`}
+              >
+                <p className="font-semibold text-texto dark:text-crema">{value.nombre}</p>
+                <p className="text-sm text-gris dark:text-gris-claro">${value.precio} MXN</p>
+                <p className="text-xs text-gris dark:text-gris-claro">{value.duracion} min</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {selectedService && (
+          <>
+            {/* Navegación de Semana */}
+            <div className="bg-white dark:bg-negro-claro rounded-xl shadow-lg p-6 mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  onClick={() => cambiarSemana(-1)}
+                  className="p-2 rounded-lg bg-rosa text-white hover:bg-rosa-dark"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <h3 className="text-xl font-semibold text-rosa">
+                  {currentWeekStart.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+                </h3>
+                <button
+                  onClick={() => cambiarSemana(1)}
+                  className="p-2 rounded-lg bg-rosa text-white hover:bg-rosa-dark"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg">
+                  {error}
+                </div>
+              )}
+
+              {/* Calendario */}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px]">
+                  <thead>
+                    <tr>
+                      <th className="p-2 border border-gris-claro dark:border-gris-oscuro">Hora</th>
+                      {diasSemana.map((dia, idx) => (
+                        <th key={idx} className="p-2 border border-gris-claro dark:border-gris-oscuro">
+                          <div className="text-sm">
+                            {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
+                          </div>
+                          <div className="font-bold">{dia.getDate()}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {horarios.map((hora) => (
+                      <tr key={hora}>
+                        <td className="p-2 border border-gris-claro dark:border-gris-oscuro text-center font-semibold">
+                          {hora}
+                        </td>
+                        {diasSemana.map((dia, idx) => {
+                          const ocupado = estaOcupado(dia, hora);
+                          const pasado = new Date(dia.toDateString() + ' ' + hora) < new Date();
+
+                          return (
+                            <td
+                              key={idx}
+                              className="p-2 border border-gris-claro dark:border-gris-oscuro"
+                            >
+                              <button
+                                onClick={() => !ocupado && !pasado && agendarCita(dia, hora)}
+                                disabled={ocupado || pasado || loading}
+                                className={`w-full h-12 rounded transition-colors ${
+                                  ocupado
+                                    ? 'bg-rosa cursor-not-allowed'
+                                    : pasado
+                                    ? 'bg-gris-claro cursor-not-allowed'
+                                    : 'bg-crema hover:bg-rosa/20 cursor-pointer'
+                                }`}
+                              >
+                                {ocupado ? '🚫' : ''}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 flex gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-crema border border-gris-claro rounded"></div>
+                  <span>Disponible</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-rosa rounded"></div>
+                  <span>Ocupado</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Mis Reservas */}
+        <div className="bg-white dark:bg-negro-claro rounded-xl shadow-lg p-6">
+          <h2 className="text-2xl font-alex-brush text-rosa mb-4">Mis Citas</h2>
+          {misReservas.length === 0 ? (
+            <p className="text-gris dark:text-gris-claro">No tienes citas agendadas</p>
+          ) : (
+            <div className="space-y-4">
+              {misReservas.map((reserva) => (
+                <div
+                  key={reserva._id}
+                  className="p-4 border-2 border-gris-claro dark:border-gris-oscuro rounded-lg"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-lg text-rosa">
+                        {serviceDurations[reserva.servicio]?.nombre}
+                      </p>
+                      <p className="text-texto dark:text-crema">
+                        <Calendar className="inline w-4 h-4 mr-1" />
+                        {new Date(reserva.fecha).toLocaleDateString('es-MX', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </p>
+                      <p className="text-texto dark:text-crema">
+                        <Clock className="inline w-4 h-4 mr-1" />
+                        {reserva.horaInicio} - {reserva.horaFin}
+                      </p>
+                      <p className="text-sm text-gris dark:text-gris-claro mt-2">
+                        Estado:{' '}
+                        <span
+                          className={
+                            reserva.estado === 'confirmada' ? 'text-green-600' : 'text-red-600'
+                          }
+                        >
+                          {reserva.estado}
+                        </span>
+                      </p>
+                    </div>
+                    {reserva.estado === 'confirmada' && (
+                      <button
+                        onClick={() => cancelarReserva(reserva._id)}
+                        className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Reservaciones;

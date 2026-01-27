@@ -1,0 +1,203 @@
+@import url('https://fonts.googleapis.com/css2?family=Alex+Brush&family=Montserrat:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Modo CLARO: Arena, Rosa, Arena casi blanco */
+    --background: 40 30% 98%;
+    --foreground: 0 0% 15%;
+    --card: 40 25% 96%;
+    --card-foreground: 0 0% 15%;
+    --popover: 40 25% 96%;
+    --popover-foreground: 0 0% 15%;
+    --primary: 345 42% 71%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 40 25% 93%;
+    --secondary-foreground: 0 0% 15%;
+    --muted: 40 20% 94%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 345 42% 71%;
+    --accent-foreground: 0 0% 15%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 345 30% 85%;
+    --input: 345 30% 85%;
+    --ring: 345 42% 71%;
+    --radius: 0.5rem;
+    
+    --color-rosa: #D98FA0;
+    --color-rosa-dark: #c77a8c;
+    --color-crema: #FAF7F4;
+    --color-crema-dark: #F5F0E8;
+    --color-negro: #2A2A2A;
+    --color-negro-claro: #3A3A3A;
+    --color-texto: #2A2A2A;
+    --color-gris: #8B7E74;
+    --color-gris-claro: #B8AFA5;
+    --color-gris-oscuro: #6B5E54;
+  }
+
+  .dark {
+    --background: 0 0% 8%;
+    --foreground: 40 20% 92%;
+    --card: 0 0% 12%;
+    --card-foreground: 40 20% 92%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 40 20% 92%;
+    --primary: 345 42% 71%;
+    --primary-foreground: 0 0% 10%;
+    --secondary: 0 0% 16%;
+    --secondary-foreground: 40 20% 92%;
+    --muted: 0 0% 16%;
+    --muted-foreground: 40 15% 70%;
+    --accent: 345 42% 71%;
+    --accent-foreground: 0 0% 10%;
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 40 20% 92%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 345 42% 71%;
+    
+    --color-texto: #EBE4D9;
+    --color-crema: #1A1614;
+    --color-crema-dark: #0D0D0D;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Montserrat', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    padding-top: 300px;
+  }
+
+  h1, h2, h3 {
+    color: var(--color-rosa);
+  }
+
+  .dark h1, .dark h2, .dark h3 {
+    color: var(--color-rosa);
+  }
+}
+
+@layer utilities {
+  .page-container {
+    padding-top: 0;
+  }
+
+  .font-alex-brush {
+    font-family: 'Alex Brush', cursive;
+  }
+
+  .text-rosa {
+    color: var(--color-rosa) !important;
+  }
+
+  .text-rosa-dark {
+    color: var(--color-rosa-dark);
+  }
+
+  .text-crema {
+    color: var(--color-crema);
+  }
+
+  .text-crema-dark {
+    color: var(--color-crema-dark);
+  }
+
+  .text-negro {
+    color: var(--color-negro);
+  }
+
+  .text-negro-claro {
+    color: var(--color-negro-claro);
+  }
+
+  .text-texto {
+    color: var(--color-texto);
+  }
+
+  .text-gris {
+    color: var(--color-gris);
+  }
+
+  .text-gris-claro {
+    color: var(--color-gris-claro);
+  }
+
+  .text-gris-oscuro {
+    color: var(--color-gris-oscuro);
+  }
+
+  .bg-rosa {
+    background-color: var(--color-rosa);
+  }
+
+  .bg-rosa-dark {
+    background-color: var(--color-rosa-dark);
+  }
+
+  .bg-crema {
+    background-color: var(--color-crema);
+  }
+
+  .bg-crema-dark {
+    background-color: var(--color-crema-dark);
+  }
+
+  .bg-negro {
+    background-color: var(--color-negro);
+  }
+
+  .bg-negro-claro {
+    background-color: var(--color-negro-claro);
+  }
+
+  .border-rosa {
+    border-color: var(--color-rosa);
+  }
+
+  .border-gris {
+    border-color: var(--color-gris);
+  }
+
+  .border-gris-oscuro {
+    border-color: var(--color-gris-oscuro);
+  }
+
+  .hover\:bg-rosa-dark:hover {
+    background-color: var(--color-rosa-dark);
+  }
+
+  .hover\:text-rosa-dark:hover {
+    color: var(--color-rosa-dark);
+  }
+
+  @media (max-width: 768px) {
+    body {
+      padding-top: 220px;
+    }
+    
+    .page-container {
+      padding-top: 0;
+    }
+  }
+
+  @media (max-width: 480px) {
+    body {
+      padding-top: 190px;
+    }
+    
+    .page-container {
+      padding-top: 0;
+    }
+  }
+}

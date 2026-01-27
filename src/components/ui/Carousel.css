@@ -1,0 +1,143 @@
+.carousel-container {
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(217, 143, 160, 0.15);
+}
+
+.carousel-image-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 66.67%;
+  background-color: #F5F0E8;
+}
+
+.dark .carousel-image-wrapper {
+  background-color: #2A2420;
+}
+
+.carousel-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.carousel-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: rgba(255, 255, 255, 0.95);
+  border: 2px solid #D98FA0;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  color: #D98FA0;
+}
+
+.carousel-button:hover {
+  background-color: #D98FA0;
+  color: white;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.dark .carousel-button {
+  background-color: rgba(42, 36, 32, 0.95);
+  border-color: #D98FA0;
+  color: #D98FA0;
+}
+
+.dark .carousel-button:hover {
+  background-color: #D98FA0;
+  color: white;
+}
+
+.carousel-button-left {
+  left: 16px;
+}
+
+.carousel-button-right {
+  right: 16px;
+}
+
+.carousel-dots {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 10;
+}
+
+.carousel-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.6);
+  border: 2px solid rgba(217, 143, 160, 0.8);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.carousel-dot:hover {
+  background-color: rgba(217, 143, 160, 0.6);
+  transform: scale(1.2);
+}
+
+.carousel-dot.active {
+  background-color: #D98FA0;
+  border-color: #D98FA0;
+  transform: scale(1.3);
+}
+
+.dark .carousel-dot {
+  background-color: rgba(42, 36, 32, 0.6);
+  border-color: rgba(217, 143, 160, 0.8);
+}
+
+.dark .carousel-dot:hover {
+  background-color: rgba(217, 143, 160, 0.6);
+}
+
+.dark .carousel-dot.active {
+  background-color: #D98FA0;
+  border-color: #D98FA0;
+}
+
+@media (max-width: 768px) {
+  .carousel-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .carousel-button-left {
+    left: 8px;
+  }
+
+  .carousel-button-right {
+    right: 8px;
+  }
+
+  .carousel-dots {
+    bottom: 12px;
+  }
+
+  .carousel-dot {
+    width: 10px;
+    height: 10px;
+  }
+}

@@ -2,13 +2,13 @@ services:
   - type: web
     name: soumaya-beauty-salon
     env: node
-    region: oregon  # o virginia, ohio, frankfurt, etc.
+    region: oregon
     buildCommand: |
-      echo "Instalando dependencias..."
-      npm ci --only=production
-      echo "Construyendo frontend..."
+      echo "=== INSTALANDO DEPENDENCIAS ==="
+      npm install
+      echo "=== CONSTRUYENDO FRONTEND ==="
       npm run build
-      echo "Build completado!"
+      echo "=== BUILD COMPLETADO ==="
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
@@ -16,9 +16,5 @@ services:
       - key: NODE_ENV
         value: production
     healthCheckPath: /api/health
-    healthCheckTimeout: 30
+    healthCheckTimeout: 60
     autoDeploy: true
-    disk:
-      name: tmp
-      mountPath: /tmp
-      sizeGB: 1

@@ -4,17 +4,19 @@ services:
     env: node
     region: oregon
     buildCommand: |
-      echo "=== INSTALANDO DEPENDENCIAS ==="
-      npm install
-      echo "=== CONSTRUYENDO FRONTEND ==="
-      npm run build
-      echo "=== BUILD COMPLETADO ==="
+      echo "=== COPIANDO FRONTEND PRE-CONSTRUIDO ==="
+      # Verifica que dist/ existe
+      if [ -d "dist" ]; then
+        echo "✅ dist/ encontrada, usando frontend pre-construido"
+        ls -la dist/
+      else
+        echo "⚠️  dist/ no encontrada, creando mínima..."
+        mkdir -p dist
+        echo '<html><body><h1>Soumaya Beauty Salon</h1><p>Frontend pronto</p></body></html>' > dist/index.html
+      fi
     startCommand: npm start
     envVars:
-      - key: NODE_VERSION
-        value: 18.17.0
       - key: NODE_ENV
         value: production
     healthCheckPath: /api/health
-    healthCheckTimeout: 60
     autoDeploy: true

@@ -1,14 +1,7 @@
-# Crea o actualiza .gitignore
-cat > .gitignore << 'EOF'
 # Dependencies
 node_modules/
 .pnp
 .pnp.js
-
-# Build
-dist/
-dist-ssr/
-*.tsbuildinfo
 
 # Environment
 .env
@@ -39,4 +32,8 @@ Thumbs.db
 
 # Render
 .render
-EOF
+
+!dist/           # DESCOMENTAR esta línea
+!dist/index.html # DESCOMENTAR esta línea
+
+dist-ssr/

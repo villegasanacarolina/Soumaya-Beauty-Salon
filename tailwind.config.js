@@ -2,10 +2,9 @@
 export default {
   darkMode: ["class"],
   content: [
-    './index.html',
-    './src/**/*.{js,jsx}',
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  prefix: "",
   theme: {
     container: {
       center: true,
@@ -22,7 +21,7 @@ export default {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         primary: {
-          DEFAULT: "hsl(var(--primary))",
+          DEFAULT: "#d4a574", // Tu color dorado
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
@@ -49,23 +48,6 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        rosa: {
-          DEFAULT: '#D98FA0',
-          dark: '#c77a8c',
-        },
-        crema: {
-          DEFAULT: '#FAF7F4',
-          dark: '#F5F0E8',
-        },
-        negro: {
-          DEFAULT: '#0D0D0D',
-          claro: '#1A1A1A',
-        },
-        gris: {
-          DEFAULT: '#8B7E74',
-          claro: '#B8AFA5',
-          oscuro: '#6B5E54',
-        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -73,7 +55,7 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        'alex-brush': ['"Alex Brush"', 'cursive'],
+        'alex-brush': ['Alex Brush', 'cursive'],
         'montserrat': ['Montserrat', 'sans-serif'],
       },
       keyframes: {

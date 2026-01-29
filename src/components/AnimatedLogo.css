@@ -6,6 +6,7 @@
   align-items: center;
   justify-content: center;
   perspective: 1000px;
+  margin: 0 auto; /* Centra el contenedor en la página */
 }
 
 /* El texto - Base del logo (DEBAJO) */
@@ -20,12 +21,12 @@
   transform: translate(-50%, -50%);
 }
 
-/* Texto en modo claro - movido un poco a la derecha */
+/* Texto en modo claro - AHORA CENTRADO IGUAL QUE EL OSCURO */
 .logo-text-light-mode {
-  left: 54%;  /* ← Un poco más a la derecha (era 50%) */
+  left: 50%;  /* ← MANTENIDO CENTRADO (antes 54%) */
 }
 
-/* La S - 30% MÁS GRANDE y MÁS ARRIBA */
+/* La S - 30% MÁS GRANDE y MÁS ARRIBA y UN POCO MÁS A LA DERECHA */
 .logo-s {
   position: absolute;
   width: 182px;  /* ← 30% más grande (140px × 1.3 = 182px) */
@@ -33,7 +34,7 @@
   object-fit: contain;
   z-index: 2;  /* ← S ENCIMA */
   top: 17%;    /* ← MÁS ARRIBA */
-  left: 12%;   /* ← Posición horizontal */
+  left: 17%;   /* ← MÁS A LA DERECHA (era 12%) */
   transform-style: preserve-3d;
   transform-origin: center center;
 }
@@ -65,14 +66,14 @@
   }
 
   .logo-text-light-mode {
-    left: 52%;
+    left: 50%;  /* ← MANTENIDO CENTRADO */
   }
 
   .logo-s {
     width: 127px;   /* ← 30% más grande */
     height: 127px;
     top: 22%;
-    left: 12%;
+    left: 18%;   /* ← MÁS A LA DERECHA (era 12%) */
   }
 }
 
@@ -89,13 +90,13 @@
   }
 
   .logo-text-light-mode {
-    left: 52%;
+    left: 50%;  /* ← MANTENIDO CENTRADO */
   }
 
   .logo-s {
     width: 91px;   /* ← 30% más grande */
     height: 91px;
     top: 22%;
-    left: 12%;
+    left: 19%;   /* ← MÁS A LA DERECHA (era 12%) */
   }
 }

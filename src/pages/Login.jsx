@@ -55,21 +55,21 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-crema dark:bg-negro flex items-center justify-center px-4" style={{ paddingTop: '300px' }}>
-      <div className="max-w-md w-full bg-white dark:bg-negro-claro rounded-2xl shadow-2xl p-8">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4" style={{ paddingTop: '300px' }}>
+      <div className="max-w-md w-full bg-card rounded-2xl shadow-2xl p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-alex-brush text-rosa mb-2">
+          <h1 className="text-4xl font-alex-brush text-primary mb-2">
             {isRegister ? 'Crear Cuenta' : 'Iniciar Sesión'}
           </h1>
-          <p className="text-gris dark:text-gris-claro">
+          <p className="text-muted-foreground">
             {isRegister ? 'Regístrate para agendar tu cita' : 'Accede a tu cuenta'}
           </p>
         </div>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg">
+          <div className="mb-6 p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg">
             {error}
           </div>
         )}
@@ -79,16 +79,16 @@ const Login = () => {
           {/* Nombre Completo (solo en registro) */}
           {isRegister && (
             <div>
-              <label className="block text-sm font-medium text-texto dark:text-crema mb-2">
+              <label className="block text-sm font-medium text-foreground mb-2">
                 Nombre Completo
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gris dark:text-gris-claro w-5 h-5" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
                 <input
                   type="text"
                   value={nombreCompleto}
                   onChange={(e) => setNombreCompleto(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gris-claro dark:border-gris-oscuro rounded-lg focus:border-rosa focus:outline-none bg-white dark:bg-negro text-texto dark:text-crema"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-input rounded-lg focus:border-primary focus:outline-none bg-background text-foreground"
                   placeholder="María García"
                   required={isRegister}
                 />
@@ -98,44 +98,44 @@ const Login = () => {
 
           {/* Teléfono */}
           <div>
-            <label className="block text-sm font-medium text-texto dark:text-crema mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Teléfono
             </label>
             <div className="relative">
-              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gris dark:text-gris-claro w-5 h-5" />
+              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <input
                 type="tel"
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border-2 border-gris-claro dark:border-gris-oscuro rounded-lg focus:border-rosa focus:outline-none bg-white dark:bg-negro text-texto dark:text-crema"
+                className="w-full pl-12 pr-4 py-3 border-2 border-input rounded-lg focus:border-primary focus:outline-none bg-background text-foreground"
                 placeholder="+52 555 123 4567"
                 required
               />
             </div>
-            <p className="mt-1 text-xs text-gris dark:text-gris-claro">
+            <p className="mt-1 text-xs text-muted-foreground">
               Formato internacional: +52 seguido de tu número
             </p>
           </div>
 
           {/* Contraseña */}
           <div>
-            <label className="block text-sm font-medium text-texto dark:text-crema mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Contraseña
             </label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gris dark:text-gris-claro w-5 h-5" />
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border-2 border-gris-claro dark:border-gris-oscuro rounded-lg focus:border-rosa focus:outline-none bg-white dark:bg-negro text-texto dark:text-crema"
+                className="w-full pl-12 pr-4 py-3 border-2 border-input rounded-lg focus:border-primary focus:outline-none bg-background text-foreground"
                 placeholder="••••••••"
                 required
                 minLength={6}
               />
             </div>
             {isRegister && (
-              <p className="mt-1 text-xs text-gris dark:text-gris-claro">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Mínimo 6 caracteres
               </p>
             )}
@@ -145,7 +145,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-rosa hover:bg-rosa-dark text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Procesando...' : isRegister ? 'Registrarse' : 'Iniciar Sesión'}
           </button>
@@ -161,7 +161,7 @@ const Login = () => {
               setTelefono('');
               setPassword('');
             }}
-            className="text-rosa hover:underline"
+            className="text-primary hover:underline"
           >
             {isRegister
               ? '¿Ya tienes cuenta? Inicia sesión'

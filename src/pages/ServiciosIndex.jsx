@@ -1,96 +1,140 @@
 import { Link } from 'react-router-dom';
-import { serviciosData } from '../data/serviciosData';
-import { ArrowRight, Clock, DollarSign } from 'lucide-react';
+import { Clock, DollarSign } from 'lucide-react';
 
-export default function ServiciosIndex() {
+const ServiciosIndex = () => {
+  const servicios = [
+    {
+      id: 'unas-gel',
+      titulo: 'Uñas de Gel',
+      descripcion: 'Manicure profesional con acabado perfecto y duradero',
+      precio: '$450',
+      duracion: '60 min',
+      imagen: '/images/servicios/unas-gel.jpg',
+    },
+    {
+      id: 'unas-acrilicas',
+      titulo: 'Uñas Acrílicas',
+      descripcion: 'Uñas con extensión de acrílico y diseños personalizados',
+      precio: '$600',
+      duracion: '90 min',
+      imagen: '/images/servicios/unas-acrilicas.jpg',
+    },
+    {
+      id: 'pedicure',
+      titulo: 'Pedicure Premium',
+      descripcion: 'Tratamiento completo para pies con exfoliación y masaje',
+      precio: '$500',
+      duracion: '90 min',
+      imagen: '/images/servicios/pedicure.jpg',
+    },
+    {
+      id: 'keratina',
+      titulo: 'Tratamiento de Keratina',
+      descripcion: 'Cabello suave, brillante y sin frizz por meses',
+      precio: '$1,200',
+      duracion: '180 min',
+      imagen: '/images/servicios/keratina.jpg',
+    },
+    {
+      id: 'tinte',
+      titulo: 'Tinte Profesional',
+      descripcion: 'Coloración profesional con productos de alta calidad',
+      precio: '$800',
+      duracion: '180 min',
+      imagen: '/images/servicios/tinte.jpg',
+    },
+    {
+      id: 'pestanas',
+      titulo: 'Extensión de Pestañas',
+      descripcion: 'Mirada impactante con pestañas naturales y voluminosas',
+      precio: '$900',
+      duracion: '60 min',
+      imagen: '/images/servicios/pestanas.jpg',
+    },
+    {
+      id: 'cejas',
+      titulo: 'Diseño de Cejas',
+      descripcion: 'Perfilado y diseño profesional de cejas',
+      precio: '$350',
+      duracion: '30 min',
+      imagen: '/images/servicios/cejas.jpg',
+    },
+  ];
+
   return (
-    <div className="page-container">
+    <div className="min-h-screen bg-background" style={{ paddingTop: '300px' }}>
       {/* Hero Section */}
-      <section className="hero-section text-center py-16">
-        <h1 className="text-5xl md:text-7xl font-alex-brush text-rosa mb-6">
-          Nuestros Servicios
-        </h1>
-        <p className="text-lg md:text-xl max-w-2xl mx-auto text-texto dark:text-crema">
-          Descubre nuestra amplia gama de servicios de belleza premium, 
-          diseñados para realzar tu belleza natural con productos de la más alta calidad.
-        </p>
-      </section>
-
-      {/* Servicios Grid */}
-      <section className="py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto px-4">
-          {serviciosData.map((servicio) => (
-            <div
-              key={servicio.id}
-              className="servicio-card group bg-crema dark:bg-negro-claro rounded-lg overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300"
-            >
-              {/* Imagen */}
-              <div className="relative h-64 overflow-hidden">
-                <img
-                  src={servicio.imagenPrincipal}
-                  alt={servicio.nombre}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-negro/60 to-transparent" />
-              </div>
-
-              {/* Contenido */}
-              <div className="p-6">
-                <h3 className="text-3xl font-alex-brush text-rosa mb-3">
-                  {servicio.nombre}
-                </h3>
-                
-                <p className="text-texto dark:text-crema mb-4">
-                  {servicio.descripcionCorta}
-                </p>
-
-                {/* Info rápida */}
-                <div className="flex items-center gap-4 mb-6 text-sm text-gris dark:text-gris-claro">
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-4 h-4" />
-                    <span>{servicio.duracion}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <DollarSign className="w-4 h-4" />
-                    <span>Desde ${servicio.precio}</span>
-                  </div>
-                </div>
-
-                {/* Botón */}
-                <Link
-                  to={`/servicios/${servicio.slug}`}
-                  className="inline-flex items-center gap-2 bg-rosa hover:bg-rosa-dark text-white px-6 py-3 rounded-full transition-all duration-300 group-hover:gap-4"
-                >
-                  Ver más
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-            </div>
-          ))}
+      <section className="bg-card py-16 px-4">
+        <div className="container mx-auto text-center">
+          <h1 className="text-5xl md:text-6xl font-alex-brush text-primary mb-4">
+            Nuestros Servicios
+          </h1>
+          <p className="text-xl text-foreground max-w-2xl mx-auto">
+            Descubre nuestra amplia gama de tratamientos de belleza diseñados para realzar tu belleza natural
+          </p>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="text-center py-16 bg-crema-dark dark:bg-negro">
-        <h2 className="text-4xl md:text-5xl font-alex-brush text-rosa mb-6">
-          ¿Lista para transformar tu look?
-        </h2>
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+      {/* Servicios Grid */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {servicios.map((servicio) => (
+              <Link
+                key={servicio.id}
+                to={`/servicios/${servicio.id}`}
+                className="group bg-card rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2"
+              >
+                <div className="aspect-video overflow-hidden">
+                  <img
+                    src={servicio.imagen}
+                    alt={servicio.titulo}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                  />
+                </div>
+                <div className="p-6">
+                  <h2 className="text-2xl font-alex-brush text-primary mb-2">
+                    {servicio.titulo}
+                  </h2>
+                  <p className="text-foreground mb-4">
+                    {servicio.descripcion}
+                  </p>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" />
+                      <span className="font-semibold">{servicio.precio}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5" />
+                      <span>{servicio.duracion}</span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Call to Action */}
+      <section className="py-16 px-4 bg-primary">
+        <div className="container mx-auto text-center">
+          <h2 className="text-4xl font-alex-brush text-white mb-4">
+            ¿Lista para tu cita?
+          </h2>
+          <p className="text-xl text-white/90 mb-8">
+            Agenda ahora y recibe atención personalizada
+          </p>
           <Link
-            to="/galeria"
-            className="bg-transparent border-2 border-rosa text-rosa hover:bg-rosa hover:text-white px-8 py-3 rounded-full transition-all duration-300"
+            to="/reservaciones"
+            className="inline-block bg-white text-primary hover:bg-background px-8 py-3 rounded-full font-semibold transition-colors"
           >
-            Ver Galería
-          </Link>
-          <Link
-            to="/contacto"
-            className="bg-rosa hover:bg-rosa-dark text-white px-8 py-3 rounded-full transition-all duration-300"
-          >
-            Agendar Cita
+            Reservar Ahora
           </Link>
         </div>
       </section>
     </div>
   );
-}
+};
+
+export default ServiciosIndex;

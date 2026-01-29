@@ -9,36 +9,19 @@ const calcularHoraFin = (horaInicio, duracionMinutos) => {
   return `${String(nuevasHoras).padStart(2, '0')}:${String(nuevosMinutos).padStart(2, '0')}`;
 };
 
-// Función para normalizar la fecha (evitar problemas de zona horaria)
-const normalizarFecha = (fechaString) => {
-  // Si la fecha viene como "2024-01-15"
+// Función para convertir fecha string a Date para consultas
+const stringToDate = (fechaString) => {
   const [year, month, day] = fechaString.split('-').map(Number);
-  
-  // Crear fecha en UTC pero con el día correcto
-  const fechaUTC = new Date(Date.UTC(year, month - 1, day));
-  
-  // Alternativa: Crear fecha en hora local (medianoche local)
-  const fechaLocal = new Date(year, month - 1, day, 12, 0, 0); // Medio día para evitar problemas
-  
-  console.log('Normalizando fecha:', {
-    fechaString,
-    fechaUTC: fechaUTC.toISOString(),
-    fechaLocal: fechaLocal.toISOString(),
-    fechaLocalToString: fechaLocal.toString()
-  });
-  
-  return fechaLocal; // Usar fecha local
+  // Crear fecha en UTC a mediodía para evitar problemas de zona horaria
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 };
 
 const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   const horaFin = calcularHoraFin(horaInicio, duracion);
-  const fechaNormalizada = normalizarFecha(fecha);
   
+  // Ahora fecha es string (YYYY-MM-DD), usarlo directamente
   const reservasExistentes = await Reservation.find({
-    fecha: {
-      $gte: new Date(fechaNormalizada.setHours(0, 0, 0, 0)),
-      $lt: new Date(fechaNormalizada.setHours(23, 59, 59, 999))
-    },
+    fecha: fecha, // Usar string directamente
     estado: { $ne: 'cancelada' },
     $or: [
       {
@@ -69,44 +52,64 @@ export const createReservation = async (req, res) => {
   try {
     const { servicio, fecha, horaInicio } = req.body;
 
-    console.log('Creando reserva con:', { servicio, fecha, horaInicio });
+    console.log('📅 CREATE RESERVATION - Recibido:', {
+      servicio,
+      fecha, // Esto debería ser "2024-01-15"
+      horaInicio,
+      bodyCompleto: req.body
+    });
 
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
     }
 
+    // Validar formato de fecha
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return res.status(400).json({ 
+        message: 'Formato de fecha inválido. Use YYYY-MM-DD' 
+      });
+    }
+
     const duracion = serviceDurations[servicio].duracion;
     const horaFin = calcularHoraFin(horaInicio, duracion);
 
-    // Validar horario de trabajo
+    // Validar horario de trabajo (10:00 - 20:00)
     const [horaInicioNum] = horaInicio.split(':').map(Number);
     const [horaFinNum] = horaFin.split(':').map(Number);
 
     if (horaInicioNum < 10 || horaFinNum > 20) {
       return res.status(400).json({
-        message: `El servicio "${serviceDurations[servicio].nombre}" tiene una duración de ${duracion} minutos. Por favor elige otro horario dentro de 10:00 AM - 8:00 PM`
+        message: `Horario no disponible. El salón opera de 10:00 AM a 8:00 PM`
       });
     }
 
-    // Normalizar la fecha para evitar problemas de zona horaria
-    const fechaNormalizada = normalizarFecha(fecha);
-
+    // Verificar disponibilidad usando fecha como string
     const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
 
     if (!disponible) {
-      return res.status(400).json({ message: 'El horario seleccionado no está disponible' });
+      return res.status(400).json({ 
+        message: 'El horario seleccionado no está disponible' 
+      });
     }
 
+    // Crear la reserva con fecha como string
     const reservation = await Reservation.create({
       usuario: req.user._id,
       nombreCliente: req.user.nombreCompleto,
       telefonoCliente: req.user.telefono,
       servicio,
-      fecha: fechaNormalizada,  // <-- Usar fecha normalizada
+      fecha: fecha, // Guardar como string "2024-01-15"
       horaInicio,
       horaFin,
       duracion,
       estado: 'confirmada'
+    });
+
+    console.log('✅ RESERVA CREADA:', {
+      id: reservation._id,
+      fechaGuardada: reservation.fecha, // Debería ser "2024-01-15"
+      horaInicio: reservation.horaInicio,
+      servicio: reservation.servicio
     });
 
     // Enviar WhatsApp
@@ -115,78 +118,137 @@ export const createReservation = async (req, res) => {
         req.user.telefono,
         req.user.nombreCompleto,
         servicio,
-        fecha, // Enviar fecha original para el mensaje
+        fecha, // Enviar la fecha como string
         horaInicio
       );
     } catch (twilioError) {
-      console.error('Error enviando WhatsApp:', twilioError);
+      console.error('❌ Error enviando WhatsApp:', twilioError);
     }
 
-    console.log('Reserva creada:', reservation);
-    res.status(201).json(reservation);
+    res.status(201).json({
+      ...reservation.toObject(),
+      mensaje: `Cita agendada para el ${fecha} a las ${horaInicio}`
+    });
   } catch (error) {
-    console.error('Error creando reserva:', error);
-    res.status(500).json({ message: error.message });
+    console.error('❌ ERROR en createReservation:', error);
+    
+    // Manejar error de duplicado
+    if (error.code === 11000) {
+      return res.status(400).json({ 
+        message: 'Este horario ya está reservado' 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: 'Error al crear la reserva',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 export const getWeekAvailability = async (req, res) => {
   try {
-    const { fecha } = req.params;
+    const { fecha } = req.params; // "2024-01-15"
     const { servicio } = req.query;
 
-    console.log('Obteniendo disponibilidad para:', { fecha, servicio });
+    console.log('📊 GET AVAILABILITY - Parámetros:', { fecha, servicio });
 
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
     }
 
-    // Normalizar fecha de inicio
-    const fechaInicio = normalizarFecha(fecha);
-    const fechaFin = new Date(fechaInicio);
-    fechaFin.setDate(fechaFin.getDate() + 6);
+    // Validar formato de fecha base
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return res.status(400).json({ 
+        message: 'Formato de fecha inválido' 
+      });
+    }
 
-    console.log('Buscando reservas entre:', {
-      fechaInicio: fechaInicio.toISOString(),
-      fechaFin: fechaFin.toISOString()
-    });
+    // Obtener todas las reservas de la semana
+    // Como fecha es string, necesitamos calcular el rango de strings
+    const [year, month, day] = fecha.split('-').map(Number);
+    const baseDate = new Date(Date.UTC(year, month - 1, day));
+    
+    const fechaInicio = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
+    // Calcular fecha fin (6 días después)
+    const fechaFinDate = new Date(baseDate);
+    fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + 6);
+    const fechaFin = `${fechaFinDate.getUTCFullYear()}-${String(fechaFinDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaFinDate.getUTCDate()).padStart(2, '0')}`;
 
+    console.log('📅 Rango de búsqueda:', { fechaInicio, fechaFin });
+
+    // Buscar todas las reservas en el rango
     const reservas = await Reservation.find({
-      fecha: {
-        $gte: fechaInicio,
-        $lte: fechaFin
+      fecha: { 
+        $gte: fechaInicio, 
+        $lte: fechaFin 
       },
       estado: { $ne: 'cancelada' }
     });
 
-    console.log('Reservas encontradas:', reservas.length);
+    console.log('🔍 Reservas encontradas:', reservas.length);
+    
     res.json(reservas);
   } catch (error) {
-    console.error('Error obteniendo disponibilidad:', error);
-    res.status(500).json({ message: error.message });
+    console.error('❌ ERROR en getWeekAvailability:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener disponibilidad',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 export const getUserReservations = async (req, res) => {
   try {
-    const reservations = await Reservation.find({ usuario: req.user._id })
-      .sort({ fecha: -1 });
+    console.log('👤 GET USER RESERVATIONS para usuario:', req.user._id);
     
-    // Formatear fechas para respuesta
+    const reservations = await Reservation.find({ 
+      usuario: req.user._id 
+    }).sort({ 
+      fecha: -1,  // Ordenar por fecha descendente
+      horaInicio: -1 
+    });
+    
+    console.log(`📋 Encontradas ${reservations.length} reservas`);
+    
+    // Formatear respuesta
     const reservasFormateadas = reservations.map(reserva => ({
-      ...reserva.toObject(),
-      fecha: reserva.fecha.toISOString().split('T')[0] // Devolver como YYYY-MM-DD
+      _id: reserva._id,
+      servicio: reserva.servicio,
+      fecha: reserva.fecha, // Ya es string "YYYY-MM-DD"
+      horaInicio: reserva.horaInicio,
+      horaFin: reserva.horaFin,
+      duracion: reserva.duracion,
+      estado: reserva.estado,
+      nombreCliente: reserva.nombreCliente,
+      servicioNombre: serviceDurations[reserva.servicio]?.nombre || reserva.servicio,
+      fechaLegible: (() => {
+        const [year, month, day] = reserva.fecha.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        return date.toLocaleDateString('es-MX', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      })()
     }));
     
     res.json(reservasFormateadas);
   } catch (error) {
-    console.error('Error obteniendo reservas:', error);
-    res.status(500).json({ message: error.message });
+    console.error('❌ ERROR en getUserReservations:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener reservas',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
 export const cancelReservation = async (req, res) => {
   try {
+    console.log('❌ CANCEL RESERVATION ID:', req.params.id);
+    
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
@@ -200,9 +262,17 @@ export const cancelReservation = async (req, res) => {
     reservation.estado = 'cancelada';
     await reservation.save();
 
-    res.json(reservation);
+    console.log('✅ Reserva cancelada:', reservation._id);
+    
+    res.json({
+      ...reservation.toObject(),
+      mensaje: 'Reserva cancelada exitosamente'
+    });
   } catch (error) {
-    console.error('Error cancelando reserva:', error);
-    res.status(500).json({ message: error.message });
+    console.error('❌ ERROR en cancelReservation:', error);
+    res.status(500).json({ 
+      message: 'Error al cancelar reserva',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };

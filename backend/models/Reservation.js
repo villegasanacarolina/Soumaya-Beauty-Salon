@@ -19,9 +19,16 @@ const reservationSchema = new mongoose.Schema({
     required: true,
     enum: ['unas-gel', 'unas-acrilicas', 'pedicure', 'keratina', 'tinte', 'pestanas', 'cejas']
   },
+  // CAMBIO IMPORTANTE: Cambiar Date por String
   fecha: {
-    type: Date,
-    required: true
+    type: String,  // Cambia Date por String
+    required: true,
+    validate: {
+      validator: function(v) {
+        return /^\d{4}-\d{2}-\d{2}$/.test(v); // Acepta solo YYYY-MM-DD
+      },
+      message: 'Formato de fecha inválido. Use YYYY-MM-DD'
+    }
   },
   horaInicio: {
     type: String,
@@ -56,6 +63,7 @@ const reservationSchema = new mongoose.Schema({
   }
 });
 
+// Actualizar el índice para usar String en lugar de Date
 reservationSchema.index({ fecha: 1, horaInicio: 1 }, { unique: true });
 
 export default mongoose.model('Reservation', reservationSchema);

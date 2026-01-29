@@ -31,24 +31,29 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero Section con Carrusel */}
+      {/* Hero Section con Carrusel - MODIFICADO */}
       <section className="relative h-screen" style={{ marginTop: '280px' }}>
         <Carousel images={heroImages} autoPlayInterval={5000} />
         
-        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-          <div className="text-center text-white px-4">
-            <h1 className="text-5xl md:text-7xl font-alex-brush text-primary mb-4">
-              Soumaya Beauty Bar
-            </h1>
-            <p className="text-xl md:text-2xl mb-8">
-              Donde el cuidado personal se convierte en arte
-            </p>
-            <Link
-              to="/servicios"
-              className="inline-block bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-full text-lg font-semibold transition-colors"
-            >
-              Descubre Nuestros Servicios
-            </Link>
+        <div className="absolute inset-0 flex items-center justify-center">
+          {/* Contenedor con fondo blanco */}
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 md:p-12 max-w-2xl mx-4">
+            <div className="text-center">
+              {/* Título en rosa y cursiva */}
+              <h1 className="text-5xl md:text-7xl font-alex-brush text-pink-500 italic mb-4">
+                Soumaya Beauty Bar
+              </h1>
+              {/* Subtítulo en negro */}
+              <p className="text-xl md:text-2xl mb-8 text-black">
+                Donde el cuidado personal se convierte en arte
+              </p>
+              <Link
+                to="/servicios"
+                className="inline-block bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-full text-lg font-semibold transition-colors"
+              >
+                Descubre Nuestros Servicios
+              </Link>
+            </div>
           </div>
         </div>
       </section>

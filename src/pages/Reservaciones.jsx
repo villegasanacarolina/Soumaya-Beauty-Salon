@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
 
 const API_URL = 'https://soumaya-beauty-salon.onrender.com';
 
@@ -19,12 +19,23 @@ const Reservaciones = () => {
   const { user, token, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  const [currentWeekStart, setCurrentWeekStart] = useState(new Date());
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    // Comenzar desde el lunes de la semana actual
+    const hoy = new Date();
+    const lunes = new Date(hoy);
+    const diaSemana = lunes.getDay();
+    const diff = lunes.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1);
+    lunes.setDate(diff);
+    lunes.setHours(0, 0, 0, 0);
+    return lunes;
+  });
+  
   const [selectedService, setSelectedService] = useState('');
   const [reservas, setReservas] = useState([]);
   const [misReservas, setMisReservas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -39,28 +50,20 @@ const Reservaciones = () => {
     cargarMisReservas();
   }, [currentWeekStart, selectedService]);
 
-  // Función para formatear fecha a YYYY-MM-DD con hora específica para el backend
-  const formatDateForBackend = (fecha, hora) => {
-    // Crear una nueva fecha con la hora específica en zona horaria local
-    const [horas, minutos] = hora.split(':').map(Number);
-    const fechaConHora = new Date(fecha);
-    fechaConHora.setHours(horas, minutos, 0, 0);
-    
-    // Para el backend, enviar como ISO string completo (incluye zona horaria)
-    // O como fecha local formateada
-    return {
-      iso: fechaConHora.toISOString(), // Para debugging
-      fechaLocal: `${fechaConHora.getFullYear()}-${String(fechaConHora.getMonth() + 1).padStart(2, '0')}-${String(fechaConHora.getDate()).padStart(2, '0')}`,
-      // Alternativa: agregar un día si el backend está en UTC
-      fechaUTC: `${fechaConHora.getUTCFullYear()}-${String(fechaConHora.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaConHora.getUTCDate()).padStart(2, '0')}`
-    };
+  // Función para formatear fecha a YYYY-MM-DD
+  const formatDateToYMD = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const cargarDisponibilidad = async () => {
     try {
-      // Enviar fecha actual en formato local
-      const hoy = new Date();
-      const fechaISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+      // Usar el lunes de la semana como fecha base
+      const fechaISO = formatDateToYMD(currentWeekStart);
+      console.log('📅 Cargando disponibilidad para fecha:', fechaISO);
       
       const response = await fetch(
         `${API_URL}/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
@@ -70,10 +73,17 @@ const Reservaciones = () => {
           },
         }
       );
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log('✅ Disponibilidad cargada:', data.length, 'reservas');
       setReservas(data);
     } catch (err) {
-      console.error('Error cargando disponibilidad:', err);
+      console.error('❌ Error cargando disponibilidad:', err);
+      setError(`Error al cargar disponibilidad: ${err.message}`);
     }
   };
 
@@ -84,10 +94,17 @@ const Reservaciones = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log('📋 Mis reservas cargadas:', data.length);
       setMisReservas(data);
     } catch (err) {
-      console.error('Error cargando mis reservas:', err);
+      console.error('❌ Error cargando mis reservas:', err);
+      setError(`Error al cargar tus reservas: ${err.message}`);
     }
   };
 
@@ -104,35 +121,24 @@ const Reservaciones = () => {
 
   const generarDiasSemana = () => {
     const dias = [];
-    // Obtener el lunes de la semana actual
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const lunes = new Date(hoy);
-    const diaSemana = lunes.getDay();
-    const diff = lunes.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1); // Ajustar cuando es domingo
-    lunes.setDate(diff);
+    const inicio = new Date(currentWeekStart);
     
     for (let i = 0; i < 7; i++) {
-      const fecha = new Date(lunes);
-      fecha.setDate(lunes.getDate() + i);
+      const fecha = new Date(inicio);
+      fecha.setDate(inicio.getDate() + i);
       dias.push(fecha);
     }
-    
     return dias;
   };
 
   const estaOcupado = (fecha, hora) => {
+    const fechaStr = formatDateToYMD(fecha);
+    
     return reservas.some((reserva) => {
-      // Convertir fecha de reserva a objeto Date
-      const fechaReserva = new Date(reserva.fecha);
-      // Comparar solo día, mes y año (ignorar hora)
-      const fechaSeleccionada = new Date(fecha);
-      
-      const mismoDia = fechaReserva.getFullYear() === fechaSeleccionada.getFullYear() &&
-                      fechaReserva.getMonth() === fechaSeleccionada.getMonth() &&
-                      fechaReserva.getDate() === fechaSeleccionada.getDate();
-      
-      return mismoDia && reserva.horaInicio <= hora && reserva.horaFin > hora;
+      // Comparar fechas como strings (YYYY-MM-DD)
+      return reserva.fecha === fechaStr && 
+             reserva.horaInicio <= hora && 
+             reserva.horaFin > hora;
     });
   };
 
@@ -144,42 +150,17 @@ const Reservaciones = () => {
 
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
-      // SOLUCIÓN: Crear la fecha en hora local y convertir a UTC para el backend
-      const fechaSeleccionada = new Date(fecha);
-      const [horasSeleccionadas, minutosSeleccionados] = hora.split(':').map(Number);
+      // Usar la fecha exacta que se muestra (sin ajustes)
+      const fechaParaBackend = formatDateToYMD(fecha);
       
-      // Crear fecha local exacta
-      const fechaLocal = new Date(
-        fechaSeleccionada.getFullYear(),
-        fechaSeleccionada.getMonth(),
-        fechaSeleccionada.getDate(),
-        horasSeleccionadas,
-        minutosSeleccionados,
-        0
-      );
-      
-      // Para el backend, necesitamos la fecha en UTC
-      // Pero primero vamos a verificar qué fecha estamos enviando
-      console.log('DEBUG - Antes de enviar:', {
-        fechaSeleccionada: fechaSeleccionada.toDateString(),
-        horaSeleccionada: hora,
-        fechaLocal: fechaLocal.toISOString(),
-        fechaLocalString: fechaLocal.toString(),
-        fechaUTC: fechaLocal.toISOString().split('T')[0],
-        fechaLocalFormato: `${fechaLocal.getFullYear()}-${String(fechaLocal.getMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getDate()).padStart(2, '0')}`,
-        fechaUTCFormato: `${fechaLocal.getUTCFullYear()}-${String(fechaLocal.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getUTCDate()).padStart(2, '0')}`
-      });
-      
-      // PRUEBA: Enviar fecha UTC (un día después si estamos en zona horaria negativa)
-      const fechaParaBackend = `${fechaLocal.getUTCFullYear()}-${String(fechaLocal.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getUTCDate()).padStart(2, '0')}`;
-      
-      console.log('Enviando al backend:', {
-        servicio: selectedService,
-        fecha: fechaParaBackend,
-        horaInicio: hora,
-        fechaLocal: fechaLocal.toLocaleDateString('es-MX')
+      console.log('🖱️ Agendando cita:', {
+        fechaVisual: fecha.toLocaleDateString('es-MX'),
+        fechaEnviada: fechaParaBackend,
+        horaEnviada: hora,
+        servicio: selectedService
       });
 
       const response = await fetch(`${API_URL}/api/reservations`, {
@@ -190,7 +171,7 @@ const Reservaciones = () => {
         },
         body: JSON.stringify({
           servicio: selectedService,
-          fecha: fechaParaBackend, // Usamos la fecha UTC
+          fecha: fechaParaBackend,
           horaInicio: hora,
         }),
       });
@@ -198,15 +179,25 @@ const Reservaciones = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message);
+        throw new Error(data.message || `Error ${response.status}`);
       }
 
-      alert(`¡Cita agendada exitosamente para el ${fechaSeleccionada.toLocaleDateString('es-MX')} a las ${hora}! Recibirás un mensaje de confirmación por WhatsApp.`);
+      console.log('✅ Cita agendada exitosamente:', data);
+      
+      setSuccess(`¡Cita agendada exitosamente para el ${fecha.toLocaleDateString('es-MX', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      })} a las ${hora}! Recibirás un mensaje de confirmación por WhatsApp.`);
+      
+      // Recargar datos
       cargarDisponibilidad();
       cargarMisReservas();
+      
     } catch (err) {
-      setError(err.message || 'Error al agendar la cita');
-      console.error('Error agendando cita:', err);
+      console.error('❌ Error agendando cita:', err);
+      setError(err.message || 'Error al agendar la cita. Por favor intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -219,7 +210,7 @@ const Reservaciones = () => {
   };
 
   const cancelarReserva = async (reservaId) => {
-    if (!confirm('¿Estás segura de que deseas cancelar esta cita?')) {
+    if (!window.confirm('¿Estás segura de que deseas cancelar esta cita?')) {
       return;
     }
 
@@ -231,32 +222,38 @@ const Reservaciones = () => {
         },
       });
 
-      if (response.ok) {
-        alert('Cita cancelada exitosamente');
-        cargarMisReservas();
-        cargarDisponibilidad();
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
+
+      alert('✅ Cita cancelada exitosamente');
+      cargarMisReservas();
+      cargarDisponibilidad();
     } catch (err) {
-      alert('Error al cancelar la cita');
+      console.error('❌ Error cancelando reserva:', err);
+      alert(`Error al cancelar la cita: ${err.message}`);
     }
   };
 
   const horarios = generarHorarios();
   const diasSemana = generarDiasSemana();
 
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="bg-primary shadow-lg" style={{ marginTop: '300px' }}>
         <div className="container mx-auto px-4 py-6">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-alex-brush text-white">Reservaciones</h1>
-              <p className="text-white/80">Hola, {user?.nombreCompleto}</p>
+              <h1 className="text-3xl md:text-4xl font-alex-brush text-white">Reservaciones</h1>
+              <p className="text-white/90 mt-1">Hola, {user?.nombreCompleto || 'Usuario'}</p>
             </div>
             <button
               onClick={logout}
-              className="flex items-center gap-2 bg-white text-primary px-4 py-2 rounded-lg hover:bg-background transition-colors"
+              className="flex items-center gap-2 bg-white text-primary px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors font-medium"
             >
               <LogOut className="w-4 h-4" />
               Cerrar Sesión
@@ -266,23 +263,60 @@ const Reservaciones = () => {
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Mensajes de estado */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <div>
+                <p className="text-red-800 font-medium">Error</p>
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <div>
+                <p className="text-green-800 font-medium">¡Éxito!</p>
+                <p className="text-green-600 text-sm">{success}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Selector de Servicio */}
-        <div className="bg-card rounded-xl shadow-lg p-6 mb-8">
-          <h2 className="text-2xl font-alex-brush text-primary mb-4">Selecciona un servicio</h2>
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
+          <h2 className="text-2xl md:text-3xl font-alex-brush text-primary mb-6">
+            Selecciona un servicio
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {Object.entries(serviceDurations).map(([key, value]) => (
               <button
                 key={key}
-                onClick={() => setSelectedService(key)}
-                className={`p-4 rounded-lg border-2 transition-all ${
+                onClick={() => {
+                  setSelectedService(key);
+                  setError('');
+                  setSuccess('');
+                }}
+                className={`p-4 rounded-xl border-2 transition-all duration-200 ${
                   selectedService === key
-                    ? 'border-primary bg-primary/10'
-                    : 'border-input hover:border-primary'
+                    ? 'border-primary bg-primary/10 shadow-md'
+                    : 'border-gray-200 hover:border-primary hover:bg-gray-50'
                 }`}
               >
-                <p className="font-semibold text-foreground">{value.nombre}</p>
-                <p className="text-sm text-muted-foreground">${value.precio} MXN</p>
-                <p className="text-xs text-muted-foreground">{value.duracion} min</p>
+                <p className="font-semibold text-gray-800 text-left">{value.nombre}</p>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm font-medium text-primary">
+                    ${value.precio} MXN
+                  </span>
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                    {value.duracion} min
+                  </span>
+                </div>
               </button>
             ))}
           </div>
@@ -291,89 +325,126 @@ const Reservaciones = () => {
         {selectedService && (
           <>
             {/* Navegación de Semana */}
-            <div className="bg-card rounded-xl shadow-lg p-6 mb-8">
-              <div className="flex items-center justify-between mb-4">
+            <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
                 <button
                   onClick={() => cambiarSemana(-1)}
-                  className="p-2 rounded-lg bg-primary text-white hover:bg-primary/90"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+                  disabled={loading}
                 >
-                  <ChevronLeft className="w-6 h-6" />
+                  <ChevronLeft className="w-5 h-5" />
+                  <span className="hidden sm:inline">Semana anterior</span>
                 </button>
-                <h3 className="text-xl font-semibold text-primary">
-                  {diasSemana[0].toLocaleDateString('es-MX', { 
-                    month: 'long', 
-                    year: 'numeric' 
-                  })} - 
-                  {diasSemana[6].toLocaleDateString('es-MX', { 
-                    day: 'numeric',
-                    month: 'long' 
-                  })}
-                </h3>
+                
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-800">
+                    {diasSemana[0].toLocaleDateString('es-MX', { 
+                      day: 'numeric', 
+                      month: 'long' 
+                    })} - {diasSemana[6].toLocaleDateString('es-MX', { 
+                      day: 'numeric', 
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Horario: 10:00 AM - 8:00 PM
+                  </p>
+                </div>
+                
                 <button
                   onClick={() => cambiarSemana(1)}
-                  className="p-2 rounded-lg bg-primary text-white hover:bg-primary/90"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+                  disabled={loading}
                 >
-                  <ChevronRight className="w-6 h-6" />
+                  <span className="hidden sm:inline">Siguiente semana</span>
+                  <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
 
-              {error && (
-                <div className="mb-4 p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg">
-                  {error}
-                </div>
-              )}
-
               {/* Calendario */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
                 <table className="w-full min-w-[800px]">
                   <thead>
-                    <tr>
-                      <th className="p-2 border border-border bg-muted">Hora</th>
-                      {diasSemana.map((dia, idx) => (
-                        <th key={idx} className="p-2 border border-border bg-muted">
-                          <div className="text-sm text-foreground">
-                            {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
-                          </div>
-                          <div className="font-bold text-primary">{dia.getDate()}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {dia.toLocaleDateString('es-MX')}
-                          </div>
-                        </th>
-                      ))}
+                    <tr className="bg-gray-50">
+                      <th className="p-4 border-b border-gray-200 text-left font-semibold text-gray-700">
+                        Hora
+                      </th>
+                      {diasSemana.map((dia, idx) => {
+                        const esHoy = formatDateToYMD(dia) === formatDateToYMD(new Date());
+                        return (
+                          <th 
+                            key={idx} 
+                            className={`p-4 border-b border-gray-200 text-center ${
+                              esHoy ? 'bg-primary/5' : ''
+                            }`}
+                          >
+                            <div className="text-sm font-medium text-gray-600">
+                              {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
+                            </div>
+                            <div className={`text-xl font-bold mt-1 ${
+                              esHoy ? 'text-primary' : 'text-gray-800'
+                            }`}>
+                              {dia.getDate()}
+                            </div>
+                            <div className="text-xs text-gray-400 mt-1">
+                              {dia.toLocaleDateString('es-MX', { month: 'short' })}
+                            </div>
+                            {esHoy && (
+                              <div className="mt-1">
+                                <span className="inline-block px-2 py-0.5 text-xs bg-primary text-white rounded-full">
+                                  Hoy
+                                </span>
+                              </div>
+                            )}
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
                     {horarios.map((hora) => (
-                      <tr key={hora}>
-                        <td className="p-2 border border-border text-center font-semibold text-foreground bg-muted">
+                      <tr key={hora} className="hover:bg-gray-50">
+                        <td className="p-4 border-b border-gray-200 text-center font-medium text-gray-700 bg-gray-50">
                           {hora}
                         </td>
                         {diasSemana.map((dia, idx) => {
                           const ocupado = estaOcupado(dia, hora);
                           
-                          // Verificar si la fecha/hora ya pasó
+                          // Verificar si ya pasó
+                          const ahora = new Date();
                           const fechaHoraSeleccionada = new Date(dia);
-                          const [horas, minutos] = hora.split(':').map(Number);
-                          fechaHoraSeleccionada.setHours(horas, minutos, 0, 0);
-                          const pasado = fechaHoraSeleccionada < new Date();
+                          const [horasSel, minutosSel] = hora.split(':').map(Number);
+                          fechaHoraSeleccionada.setHours(horasSel, minutosSel, 0, 0);
+                          const pasado = fechaHoraSeleccionada < ahora;
 
                           return (
-                            <td
-                              key={idx}
-                              className="p-2 border border-border"
-                            >
+                            <td key={idx} className="p-2 border-b border-gray-200">
                               <button
                                 onClick={() => !ocupado && !pasado && agendarCita(dia, hora)}
                                 disabled={ocupado || pasado || loading}
-                                className={`w-full h-12 rounded transition-colors ${
+                                className={`w-full h-12 rounded-lg transition-all duration-200 flex items-center justify-center ${
                                   ocupado
-                                    ? 'bg-primary cursor-not-allowed'
+                                    ? 'bg-red-100 text-red-700 border border-red-200 cursor-not-allowed'
                                     : pasado
-                                    ? 'bg-muted cursor-not-allowed'
-                                    : 'bg-card hover:bg-primary/20 cursor-pointer border border-input'
-                                }`}
+                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    : 'bg-white hover:bg-primary/10 text-gray-700 hover:text-primary border border-gray-200 hover:border-primary cursor-pointer'
+                                } ${loading ? 'opacity-50' : ''}`}
+                                title={`${dia.toLocaleDateString('es-MX')} a las ${hora}`}
                               >
-                                {ocupado ? '🚫' : pasado ? '✗' : '✓'}
+                                {ocupado ? (
+                                  <span className="flex items-center gap-1">
+                                    <XCircle className="w-4 h-4" />
+                                    <span className="text-xs hidden sm:inline">Ocupado</span>
+                                  </span>
+                                ) : pasado ? (
+                                  <span className="text-xs">No disp.</span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <CheckCircle className="w-4 h-4" />
+                                    <span className="text-xs hidden sm:inline">Disponible</span>
+                                  </span>
+                                )}
                               </button>
                             </td>
                           );
@@ -384,18 +455,35 @@ const Reservaciones = () => {
                 </table>
               </div>
 
-              <div className="mt-4 flex gap-4 text-sm text-foreground">
+              {/* Leyenda */}
+              <div className="mt-6 flex flex-wrap gap-4 items-center justify-center">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-card border border-input rounded flex items-center justify-center">✓</div>
-                  <span>Disponible</span>
+                  <div className="w-4 h-4 bg-white border-2 border-gray-200 rounded"></div>
+                  <span className="text-sm text-gray-600">Disponible</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">🚫</div>
-                  <span>Ocupado</span>
+                  <div className="w-4 h-4 bg-red-100 border-2 border-red-200 rounded"></div>
+                  <span className="text-sm text-gray-600">Ocupado</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-muted rounded flex items-center justify-center">✗</div>
-                  <span>Pasado</span>
+                  <div className="w-4 h-4 bg-gray-100 border-2 border-gray-200 rounded"></div>
+                  <span className="text-sm text-gray-600">No disponible</span>
+                </div>
+              </div>
+
+              {/* Información */}
+              <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-medium text-blue-800 mb-1">Instrucciones para agendar:</h4>
+                    <ul className="text-sm text-blue-700 space-y-1">
+                      <li>• Selecciona un horario disponible (verde)</li>
+                      <li>• Haz clic en el botón verde para agendar</li>
+                      <li>• Recibirás un mensaje de confirmación por WhatsApp</li>
+                      <li>• Puedes cancelar tu cita desde "Mis Citas"</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
@@ -403,53 +491,87 @@ const Reservaciones = () => {
         )}
 
         {/* Mis Reservas */}
-        <div className="bg-card rounded-xl shadow-lg p-6">
-          <h2 className="text-2xl font-alex-brush text-primary mb-4">Mis Citas</h2>
+        <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl md:text-3xl font-alex-brush text-primary">
+              Mis Citas Programadas
+            </h2>
+            <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+              {misReservas.length} {misReservas.length === 1 ? 'cita' : 'citas'}
+            </span>
+          </div>
+          
           {misReservas.length === 0 ? (
-            <p className="text-muted-foreground">No tienes citas agendadas</p>
+            <div className="text-center py-12">
+              <div className="inline-block p-4 bg-gray-100 rounded-full mb-4">
+                <Calendar className="w-12 h-12 text-gray-400" />
+              </div>
+              <p className="text-gray-500 text-lg">No tienes citas agendadas</p>
+              <p className="text-gray-400 mt-2">Selecciona un servicio y horario para agendar tu primera cita</p>
+            </div>
           ) : (
             <div className="space-y-4">
               {misReservas.map((reserva) => (
                 <div
                   key={reserva._id}
-                  className="p-4 border-2 border-border rounded-lg bg-background"
+                  className={`p-4 rounded-xl border-2 transition-colors ${
+                    reserva.estado === 'confirmada'
+                      ? 'border-green-200 bg-green-50 hover:bg-green-100'
+                      : 'border-red-200 bg-red-50 hover:bg-red-100'
+                  }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-semibold text-lg text-primary">
-                        {serviceDurations[reserva.servicio]?.nombre}
-                      </p>
-                      <p className="text-foreground">
-                        <Calendar className="inline w-4 h-4 mr-1" />
-                        {new Date(reserva.fecha).toLocaleDateString('es-MX', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </p>
-                      <p className="text-foreground">
-                        <Clock className="inline w-4 h-4 mr-1" />
-                        {reserva.horaInicio} - {reserva.horaFin}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Estado:{' '}
-                        <span
-                          className={
-                            reserva.estado === 'confirmada' ? 'text-green-600' : 'text-red-600'
-                          }
-                        >
-                          {reserva.estado}
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          reserva.estado === 'confirmada'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {reserva.estado === 'confirmada' ? '✅ Confirmada' : '❌ Cancelada'}
                         </span>
-                      </p>
+                        <span className="text-sm text-gray-500">
+                          ID: {reserva._id.slice(-6)}
+                        </span>
+                      </div>
+                      
+                      <h3 className="font-bold text-lg text-gray-800 mb-2">
+                        {reserva.servicioNombre || serviceDurations[reserva.servicio]?.nombre}
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm text-gray-500">Fecha</p>
+                            <p className="font-medium text-gray-700">
+                              {reserva.fechaLegible || reserva.fecha}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm text-gray-500">Horario</p>
+                            <p className="font-medium text-gray-700">
+                              {reserva.horaInicio} - {reserva.horaFin} ({reserva.duracion} min)
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                    
                     {reserva.estado === 'confirmada' && (
-                      <button
-                        onClick={() => cancelarReserva(reserva._id)}
-                        className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors"
-                      >
-                        Cancelar
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => cancelarReserva(reserva._id)}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium text-sm whitespace-nowrap"
+                          disabled={loading}
+                        >
+                          Cancelar Cita
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>

@@ -39,19 +39,29 @@ const Reservaciones = () => {
     cargarMisReservas();
   }, [currentWeekStart, selectedService]);
 
-  // Función para formatear fecha a YYYY-MM-DD sin problemas de zona horaria
-  const formatDateToYMD = (date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0); // Normalizar a medianoche
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  // Función para formatear fecha a YYYY-MM-DD con hora específica para el backend
+  const formatDateForBackend = (fecha, hora) => {
+    // Crear una nueva fecha con la hora específica en zona horaria local
+    const [horas, minutos] = hora.split(':').map(Number);
+    const fechaConHora = new Date(fecha);
+    fechaConHora.setHours(horas, minutos, 0, 0);
+    
+    // Para el backend, enviar como ISO string completo (incluye zona horaria)
+    // O como fecha local formateada
+    return {
+      iso: fechaConHora.toISOString(), // Para debugging
+      fechaLocal: `${fechaConHora.getFullYear()}-${String(fechaConHora.getMonth() + 1).padStart(2, '0')}-${String(fechaConHora.getDate()).padStart(2, '0')}`,
+      // Alternativa: agregar un día si el backend está en UTC
+      fechaUTC: `${fechaConHora.getUTCFullYear()}-${String(fechaConHora.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaConHora.getUTCDate()).padStart(2, '0')}`
+    };
   };
 
   const cargarDisponibilidad = async () => {
     try {
-      const fechaISO = formatDateToYMD(currentWeekStart);
+      // Enviar fecha actual en formato local
+      const hoy = new Date();
+      const fechaISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+      
       const response = await fetch(
         `${API_URL}/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
         {
@@ -94,36 +104,35 @@ const Reservaciones = () => {
 
   const generarDiasSemana = () => {
     const dias = [];
-    // Crear una fecha de inicio normalizada (sin horas/minutos/segundos)
-    const inicio = new Date(currentWeekStart);
-    inicio.setHours(0, 0, 0, 0);
-    // Ajustar al inicio de la semana (lunes)
-    const dayOfWeek = inicio.getDay();
-    const diff = dayOfWeek === 0 ? -6 : 1; // Si es domingo, ir al lunes anterior
-    inicio.setDate(inicio.getDate() - (dayOfWeek - diff));
-
+    // Obtener el lunes de la semana actual
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const lunes = new Date(hoy);
+    const diaSemana = lunes.getDay();
+    const diff = lunes.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1); // Ajustar cuando es domingo
+    lunes.setDate(diff);
+    
     for (let i = 0; i < 7; i++) {
-      const fecha = new Date(inicio);
-      fecha.setDate(inicio.getDate() + i);
-      fecha.setHours(0, 0, 0, 0); // Asegurar que sea medianoche
+      const fecha = new Date(lunes);
+      fecha.setDate(lunes.getDate() + i);
       dias.push(fecha);
     }
+    
     return dias;
   };
 
   const estaOcupado = (fecha, hora) => {
     return reservas.some((reserva) => {
+      // Convertir fecha de reserva a objeto Date
       const fechaReserva = new Date(reserva.fecha);
-      fechaReserva.setHours(0, 0, 0, 0);
-      
+      // Comparar solo día, mes y año (ignorar hora)
       const fechaSeleccionada = new Date(fecha);
-      fechaSeleccionada.setHours(0, 0, 0, 0);
       
-      return (
-        fechaReserva.getTime() === fechaSeleccionada.getTime() &&
-        reserva.horaInicio <= hora &&
-        reserva.horaFin > hora
-      );
+      const mismoDia = fechaReserva.getFullYear() === fechaSeleccionada.getFullYear() &&
+                      fechaReserva.getMonth() === fechaSeleccionada.getMonth() &&
+                      fechaReserva.getDate() === fechaSeleccionada.getDate();
+      
+      return mismoDia && reserva.horaInicio <= hora && reserva.horaFin > hora;
     });
   };
 
@@ -137,19 +146,40 @@ const Reservaciones = () => {
     setError('');
 
     try {
-      // Crear una copia de la fecha y establecer la hora correcta
-      const fechaConHora = new Date(fecha);
-      const [horas, minutos] = hora.split(':').map(Number);
-      fechaConHora.setHours(horas, minutos, 0, 0);
+      // SOLUCIÓN: Crear la fecha en hora local y convertir a UTC para el backend
+      const fechaSeleccionada = new Date(fecha);
+      const [horasSeleccionadas, minutosSeleccionados] = hora.split(':').map(Number);
       
-      // Enviar la fecha formateada correctamente
-      const fechaISO = formatDateToYMD(fechaConHora);
+      // Crear fecha local exacta
+      const fechaLocal = new Date(
+        fechaSeleccionada.getFullYear(),
+        fechaSeleccionada.getMonth(),
+        fechaSeleccionada.getDate(),
+        horasSeleccionadas,
+        minutosSeleccionados,
+        0
+      );
       
-      console.log('Agendando cita:', {
-        fechaOriginal: fecha.toISOString(),
-        fechaConHora: fechaConHora.toISOString(),
-        fechaISO: fechaISO,
-        hora: hora
+      // Para el backend, necesitamos la fecha en UTC
+      // Pero primero vamos a verificar qué fecha estamos enviando
+      console.log('DEBUG - Antes de enviar:', {
+        fechaSeleccionada: fechaSeleccionada.toDateString(),
+        horaSeleccionada: hora,
+        fechaLocal: fechaLocal.toISOString(),
+        fechaLocalString: fechaLocal.toString(),
+        fechaUTC: fechaLocal.toISOString().split('T')[0],
+        fechaLocalFormato: `${fechaLocal.getFullYear()}-${String(fechaLocal.getMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getDate()).padStart(2, '0')}`,
+        fechaUTCFormato: `${fechaLocal.getUTCFullYear()}-${String(fechaLocal.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getUTCDate()).padStart(2, '0')}`
+      });
+      
+      // PRUEBA: Enviar fecha UTC (un día después si estamos en zona horaria negativa)
+      const fechaParaBackend = `${fechaLocal.getUTCFullYear()}-${String(fechaLocal.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaLocal.getUTCDate()).padStart(2, '0')}`;
+      
+      console.log('Enviando al backend:', {
+        servicio: selectedService,
+        fecha: fechaParaBackend,
+        horaInicio: hora,
+        fechaLocal: fechaLocal.toLocaleDateString('es-MX')
       });
 
       const response = await fetch(`${API_URL}/api/reservations`, {
@@ -160,7 +190,7 @@ const Reservaciones = () => {
         },
         body: JSON.stringify({
           servicio: selectedService,
-          fecha: fechaISO,
+          fecha: fechaParaBackend, // Usamos la fecha UTC
           horaInicio: hora,
         }),
       });
@@ -171,7 +201,7 @@ const Reservaciones = () => {
         throw new Error(data.message);
       }
 
-      alert('¡Cita agendada exitosamente! Recibirás un mensaje de confirmación por WhatsApp.');
+      alert(`¡Cita agendada exitosamente para el ${fechaSeleccionada.toLocaleDateString('es-MX')} a las ${hora}! Recibirás un mensaje de confirmación por WhatsApp.`);
       cargarDisponibilidad();
       cargarMisReservas();
     } catch (err) {
@@ -185,7 +215,6 @@ const Reservaciones = () => {
   const cambiarSemana = (direccion) => {
     const nuevaFecha = new Date(currentWeekStart);
     nuevaFecha.setDate(nuevaFecha.getDate() + (direccion * 7));
-    nuevaFecha.setHours(0, 0, 0, 0);
     setCurrentWeekStart(nuevaFecha);
   };
 
@@ -211,10 +240,6 @@ const Reservaciones = () => {
       alert('Error al cancelar la cita');
     }
   };
-
-  // Crear fecha de hoy para comparación
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
 
   const horarios = generarHorarios();
   const diasSemana = generarDiasSemana();
@@ -304,20 +329,17 @@ const Reservaciones = () => {
                   <thead>
                     <tr>
                       <th className="p-2 border border-border bg-muted">Hora</th>
-                      {diasSemana.map((dia, idx) => {
-                        const fechaFormateada = formatDateToYMD(dia);
-                        return (
-                          <th key={idx} className="p-2 border border-border bg-muted">
-                            <div className="text-sm text-foreground">
-                              {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
-                            </div>
-                            <div className="font-bold text-primary">{dia.getDate()}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {fechaFormateada}
-                            </div>
-                          </th>
-                        );
-                      })}
+                      {diasSemana.map((dia, idx) => (
+                        <th key={idx} className="p-2 border border-border bg-muted">
+                          <div className="text-sm text-foreground">
+                            {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
+                          </div>
+                          <div className="font-bold text-primary">{dia.getDate()}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {dia.toLocaleDateString('es-MX')}
+                          </div>
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>

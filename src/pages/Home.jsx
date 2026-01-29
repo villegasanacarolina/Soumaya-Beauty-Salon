@@ -12,19 +12,19 @@ const Home = () => {
     {
       title: 'Uñas de Gel',
       description: 'Manicure profesional con acabado perfecto y duradero',
-      image: '/images/home/service-unas.jpg',
+      image: 'public/images/servicios/gel-main.jpg',
       link: '/servicios/unas-gel',
     },
     {
       title: 'Tratamiento de Keratina',
       description: 'Cabello suave, brillante y sin frizz por meses',
-      image: '/images/home/service-keratina.jpg',
+      image: 'public/images/servicios/index/keratina-main.jpg',
       link: '/servicios/keratina',
     },
     {
       title: 'Extensión de Pestañas',
       description: 'Mirada impactante con pestañas naturales y voluminosas',
-      image: '/images/home/service-pestanas.jpg',
+      image: 'public/images/servicios/index/pestanas-main.jpg',
       link: '/servicios/pestanas',
     },
   ];

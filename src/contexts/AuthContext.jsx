@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
-import API_URL from '../config/api';
+
+const API_URL = 'https://soumaya-beauty-salon.onrender.com';
 
 const AuthContext = createContext();
 

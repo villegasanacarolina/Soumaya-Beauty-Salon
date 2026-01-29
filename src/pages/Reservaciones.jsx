@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut } from 'lucide-react';
-import API_URL from '../config/api';
+
+const API_URL = 'https://soumaya-beauty-salon.onrender.com';
 
 const serviceDurations = {
   'unas-gel': { duracion: 60, nombre: 'Uñas de Gel', precio: 450 },

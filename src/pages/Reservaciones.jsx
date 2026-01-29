@@ -57,12 +57,25 @@ const Reservaciones = () => {
     return `${year}-${month}-${day}`;
   };
 
-  const calcularHoraFin = (horaInicio, duracionMinutos) => {
-    const [horas, minutos] = horaInicio.split(':').map(Number);
-    const totalMinutos = horas * 60 + minutos + duracionMinutos;
-    const nuevasHoras = Math.floor(totalMinutos / 60);
-    const nuevosMinutos = totalMinutos % 60;
-    return `${String(nuevasHoras).padStart(2, '0')}:${String(nuevosMinutos).padStart(2, '0')}`;
+  // Función para calcular todas las horas ocupadas por una reserva
+  const obtenerHorasOcupadas = (reserva) => {
+    const horasOcupadas = [];
+    const [horaInicio, minutoInicio] = reserva.horaInicio.split(':').map(Number);
+    const [horaFin, minutoFin] = reserva.horaFin.split(':').map(Number);
+    
+    // Convertir a minutos totales
+    const inicioMinutos = horaInicio * 60 + minutoInicio;
+    const finMinutos = horaFin * 60 + minutoFin;
+    
+    // Generar todas las franjas de 30 minutos ocupadas
+    for (let minutos = inicioMinutos; minutos < finMinutos; minutos += 30) {
+      const hora = Math.floor(minutos / 60);
+      const minuto = minutos % 60;
+      const horaStr = `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+      horasOcupadas.push(horaStr);
+    }
+    
+    return horasOcupadas;
   };
 
   const cargarDisponibilidad = async () => {
@@ -71,7 +84,7 @@ const Reservaciones = () => {
       console.log('📅 Cargando disponibilidad para fecha:', fechaISO);
       
       const response = await fetch(
-        `${API_URL}/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
+        `${API_URL}/api/reservations/availability/${fechaISO}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -136,19 +149,51 @@ const Reservaciones = () => {
     return dias;
   };
 
+  // Verificar si una hora específica está ocupada
   const estaOcupado = (fecha, hora) => {
     const fechaStr = formatDateToYMD(fecha);
     
     return reservas.some((reserva) => {
-      // Asegurarnos de que la reserva tenga la fecha en formato string
+      // Obtener la fecha de la reserva
       const reservaFecha = typeof reserva.fecha === 'string' 
         ? reserva.fecha 
         : formatDateToYMD(new Date(reserva.fecha));
       
-      return reservaFecha === fechaStr && 
-             reserva.horaInicio <= hora && 
-             reserva.horaFin > hora;
+      // Verificar que sea el mismo día
+      if (reservaFecha !== fechaStr) return false;
+      
+      // Obtener todas las horas ocupadas por esta reserva
+      const horasOcupadas = obtenerHorasOcupadas(reserva);
+      
+      // Verificar si la hora está en las horas ocupadas
+      return horasOcupadas.includes(hora);
     });
+  };
+
+  // Obtener información de la reserva que ocupa esta hora (para tooltip)
+  const getReservaInfo = (fecha, hora) => {
+    const fechaStr = formatDateToYMD(fecha);
+    
+    for (const reserva of reservas) {
+      const reservaFecha = typeof reserva.fecha === 'string' 
+        ? reserva.fecha 
+        : formatDateToYMD(new Date(reserva.fecha));
+      
+      if (reservaFecha !== fechaStr) continue;
+      
+      const horasOcupadas = obtenerHorasOcupadas(reserva);
+      if (horasOcupadas.includes(hora)) {
+        return {
+          servicio: reserva.servicio,
+          nombreCliente: reserva.nombreCliente,
+          horaInicio: reserva.horaInicio,
+          horaFin: reserva.horaFin,
+          duracion: reserva.duracion
+        };
+      }
+    }
+    
+    return null;
   };
 
   const agendarCita = async (fecha, hora) => {
@@ -163,16 +208,13 @@ const Reservaciones = () => {
 
     try {
       const fechaParaBackend = formatDateToYMD(fecha);
-      const duracion = serviceDurations[selectedService].duracion;
-      const horaFin = calcularHoraFin(hora, duracion);
       
       console.log('🖱️ Agendando cita:', {
         fechaVisual: fecha.toLocaleDateString('es-MX'),
         fechaEnviada: fechaParaBackend,
         horaEnviada: hora,
         servicio: selectedService,
-        duracion: duracion,
-        horaFinCalculada: horaFin
+        duracion: serviceDurations[selectedService].duracion
       });
 
       const response = await fetch(`${API_URL}/api/reservations`, {
@@ -196,19 +238,31 @@ const Reservaciones = () => {
 
       console.log('✅ Cita agendada exitosamente:', data);
       
-      // AÑADIR LA NUEVA RESERVA AL ESTADO DE RESERVAS
+      // Calcular horas fin localmente
+      const duracion = serviceDurations[selectedService].duracion;
+      const [horaInicioNum, minutoInicioNum] = hora.split(':').map(Number);
+      const inicioMinutos = horaInicioNum * 60 + minutoInicioNum;
+      const finMinutos = inicioMinutos + duracion;
+      const horaFinNum = Math.floor(finMinutos / 60);
+      const minutoFinNum = finMinutos % 60;
+      const horaFin = `${String(horaFinNum).padStart(2, '0')}:${String(minutoFinNum).padStart(2, '0')}`;
+      
+      // Crear objeto de reserva con todas las horas ocupadas
       const nuevaReserva = {
         _id: data._id,
-        fecha: fechaParaBackend, // Ya viene como string del backend
+        fecha: fechaParaBackend,
         horaInicio: hora,
         horaFin: data.horaFin || horaFin,
         servicio: selectedService,
+        duracion: duracion,
+        nombreCliente: user?.nombreCompleto || 'Cliente',
         estado: 'confirmada'
       };
       
-      console.log('➕ Añadiendo nueva reserva al estado:', nuevaReserva);
+      console.log('➕ Añadiendo nueva reserva:', nuevaReserva);
+      console.log('⏰ Horas ocupadas:', obtenerHorasOcupadas(nuevaReserva));
       
-      // Actualizar el estado de reservas inmediatamente
+      // Actualizar el estado de reservas
       setReservas(prevReservas => [...prevReservas, nuevaReserva]);
       
       setSuccess(`¡Cita agendada exitosamente para el ${fecha.toLocaleDateString('es-MX', { 
@@ -216,11 +270,11 @@ const Reservaciones = () => {
         year: 'numeric', 
         month: 'long', 
         day: 'numeric' 
-      })} a las ${hora}! Recibirás un mensaje de confirmación por WhatsApp.`);
+      })} a las ${hora}! Duración: ${duracion} minutos. Recibirás un mensaje de confirmación por WhatsApp.`);
       
-      // También recargar datos del backend para asegurar consistencia
-      cargarDisponibilidad();
-      cargarMisReservas();
+      // Recargar datos del backend
+      await cargarDisponibilidad();
+      await cargarMisReservas();
       
     } catch (err) {
       console.error('❌ Error agendando cita:', err);
@@ -259,8 +313,8 @@ const Reservaciones = () => {
       );
       
       alert('✅ Cita cancelada exitosamente');
-      cargarMisReservas();
-      cargarDisponibilidad(); // Recargar para asegurar consistencia
+      await cargarMisReservas();
+      await cargarDisponibilidad();
     } catch (err) {
       console.error('❌ Error cancelando reserva:', err);
       alert(`Error al cancelar la cita: ${err.message}`);
@@ -269,9 +323,6 @@ const Reservaciones = () => {
 
   const horarios = generarHorarios();
   const diasSemana = generarDiasSemana();
-
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -352,6 +403,19 @@ const Reservaciones = () => {
               </button>
             ))}
           </div>
+          
+          {selectedService && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-blue-700 text-sm font-medium">
+                Servicio seleccionado: <span className="text-primary">{serviceDurations[selectedService].nombre}</span>
+                <span className="ml-4">Duración: <span className="font-bold">{serviceDurations[selectedService].duracion} minutos</span></span>
+                <span className="ml-4">Precio: <span className="font-bold">${serviceDurations[selectedService].precio} MXN</span></span>
+              </p>
+              <p className="text-blue-600 text-xs mt-2">
+                ⓘ Al agendar, se ocuparán {serviceDurations[selectedService].duracion/30} franjas de tiempo consecutivas.
+              </p>
+            </div>
+          )}
         </div>
 
         {selectedService && (
@@ -442,6 +506,7 @@ const Reservaciones = () => {
                         </td>
                         {diasSemana.map((dia, idx) => {
                           const ocupado = estaOcupado(dia, hora);
+                          const reservaInfo = ocupado ? getReservaInfo(dia, hora) : null;
                           
                           // Verificar si ya pasó
                           const ahora = new Date();
@@ -455,27 +520,32 @@ const Reservaciones = () => {
                               <button
                                 onClick={() => !ocupado && !pasado && agendarCita(dia, hora)}
                                 disabled={ocupado || pasado || loading}
-                                className={`w-full h-12 rounded-lg transition-all duration-200 flex items-center justify-center ${
+                                className={`w-full h-12 rounded-lg transition-all duration-200 flex items-center justify-center relative group ${
                                   ocupado
-                                    ? 'bg-pink-100 text-pink-700 border border-pink-300 cursor-not-allowed' // Cambiado a rosa
+                                    ? 'bg-pink-100 text-pink-700 border border-pink-300 cursor-not-allowed'
                                     : pasado
                                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                     : 'bg-white hover:bg-primary/10 text-gray-700 hover:text-primary border border-gray-200 hover:border-primary cursor-pointer'
                                 } ${loading ? 'opacity-50' : ''}`}
-                                title={`${dia.toLocaleDateString('es-MX')} a las ${hora}`}
+                                title={reservaInfo 
+                                  ? `Ocupado por: ${reservaInfo.nombreCliente}\nServicio: ${serviceDurations[reservaInfo.servicio]?.nombre || reservaInfo.servicio}\nHorario: ${reservaInfo.horaInicio} - ${reservaInfo.horaFin} (${reservaInfo.duracion} min)`
+                                  : `${dia.toLocaleDateString('es-MX')} a las ${hora}`
+                                }
                               >
                                 {ocupado ? (
-                                  <span className="flex items-center gap-1">
-                                    <XCircle className="w-4 h-4 text-pink-600" /> {/* Cambiado a rosa */}
-                                    <span className="text-xs hidden sm:inline">Ocupado</span>
-                                  </span>
+                                  <>
+                                    <XCircle className="w-4 h-4 text-pink-600" />
+                                    {/* Tooltip */}
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                      <div className="font-medium">{serviceDurations[reservaInfo?.servicio]?.nombre || 'Servicio'}</div>
+                                      <div>{reservaInfo?.horaInicio} - {reservaInfo?.horaFin}</div>
+                                      <div className="text-gray-300">{reservaInfo?.nombreCliente}</div>
+                                    </div>
+                                  </>
                                 ) : pasado ? (
-                                  <span className="text-xs">No disp.</span>
+                                  <span className="text-xs">✗</span>
                                 ) : (
-                                  <span className="flex items-center gap-1">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span className="text-xs hidden sm:inline">Disponible</span>
-                                  </span>
+                                  <CheckCircle className="w-4 h-4" />
                                 )}
                               </button>
                             </td>
@@ -494,7 +564,7 @@ const Reservaciones = () => {
                   <span className="text-sm text-gray-600">Disponible</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-pink-100 border-2 border-pink-300 rounded"></div> {/* Cambiado a rosa */}
+                  <div className="w-4 h-4 bg-pink-100 border-2 border-pink-300 rounded"></div>
                   <span className="text-sm text-gray-600">Ocupado</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -510,11 +580,10 @@ const Reservaciones = () => {
                   <div>
                     <h4 className="font-medium text-blue-800 mb-1">Instrucciones para agendar:</h4>
                     <ul className="text-sm text-blue-700 space-y-1">
-                      <li>• Selecciona un horario disponible (verde)</li>
-                      <li>• Haz clic en el botón verde para agendar</li>
-                      <li>• Los horarios agendados se marcarán en <span className="text-pink-600 font-medium">rosa</span></li> {/* Mencionar rosa */}
+                      <li>• Cada servicio tiene una duración específica (ver arriba)</li>
+                      <li>• Al agendar, se ocuparán múltiples franjas consecutivas según la duración</li>
+                      <li>• Pasa el cursor sobre los recuadros <span className="text-pink-600 font-medium">rosas</span> para ver información de la reserva</li>
                       <li>• Recibirás un mensaje de confirmación por WhatsApp</li>
-                      <li>• Puedes cancelar tu cita desde "Mis Citas"</li>
                     </ul>
                   </div>
                 </div>
@@ -572,7 +641,7 @@ const Reservaciones = () => {
                         {reserva.servicioNombre || serviceDurations[reserva.servicio]?.nombre}
                       </h3>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
                           <div>
@@ -589,6 +658,16 @@ const Reservaciones = () => {
                             <p className="text-sm text-gray-500">Horario</p>
                             <p className="font-medium text-gray-700">
                               {reserva.horaInicio} - {reserva.horaFin} ({reserva.duracion} min)
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 text-gray-400 flex-shrink-0">💰</div>
+                          <div>
+                            <p className="text-sm text-gray-500">Precio</p>
+                            <p className="font-medium text-gray-700">
+                              ${serviceDurations[reserva.servicio]?.precio || '---'} MXN
                             </p>
                           </div>
                         </div>

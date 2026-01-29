@@ -20,7 +20,6 @@ const Reservaciones = () => {
   const navigate = useNavigate();
 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
-    // Comenzar desde el lunes de la semana actual
     const hoy = new Date();
     const lunes = new Date(hoy);
     const diaSemana = lunes.getDay();
@@ -50,7 +49,6 @@ const Reservaciones = () => {
     cargarMisReservas();
   }, [currentWeekStart, selectedService]);
 
-  // Función para formatear fecha a YYYY-MM-DD
   const formatDateToYMD = (date) => {
     const d = new Date(date);
     const year = d.getFullYear();
@@ -59,9 +57,16 @@ const Reservaciones = () => {
     return `${year}-${month}-${day}`;
   };
 
+  const calcularHoraFin = (horaInicio, duracionMinutos) => {
+    const [horas, minutos] = horaInicio.split(':').map(Number);
+    const totalMinutos = horas * 60 + minutos + duracionMinutos;
+    const nuevasHoras = Math.floor(totalMinutos / 60);
+    const nuevosMinutos = totalMinutos % 60;
+    return `${String(nuevasHoras).padStart(2, '0')}:${String(nuevosMinutos).padStart(2, '0')}`;
+  };
+
   const cargarDisponibilidad = async () => {
     try {
-      // Usar el lunes de la semana como fecha base
       const fechaISO = formatDateToYMD(currentWeekStart);
       console.log('📅 Cargando disponibilidad para fecha:', fechaISO);
       
@@ -135,8 +140,12 @@ const Reservaciones = () => {
     const fechaStr = formatDateToYMD(fecha);
     
     return reservas.some((reserva) => {
-      // Comparar fechas como strings (YYYY-MM-DD)
-      return reserva.fecha === fechaStr && 
+      // Asegurarnos de que la reserva tenga la fecha en formato string
+      const reservaFecha = typeof reserva.fecha === 'string' 
+        ? reserva.fecha 
+        : formatDateToYMD(new Date(reserva.fecha));
+      
+      return reservaFecha === fechaStr && 
              reserva.horaInicio <= hora && 
              reserva.horaFin > hora;
     });
@@ -153,14 +162,17 @@ const Reservaciones = () => {
     setSuccess('');
 
     try {
-      // Usar la fecha exacta que se muestra (sin ajustes)
       const fechaParaBackend = formatDateToYMD(fecha);
+      const duracion = serviceDurations[selectedService].duracion;
+      const horaFin = calcularHoraFin(hora, duracion);
       
       console.log('🖱️ Agendando cita:', {
         fechaVisual: fecha.toLocaleDateString('es-MX'),
         fechaEnviada: fechaParaBackend,
         horaEnviada: hora,
-        servicio: selectedService
+        servicio: selectedService,
+        duracion: duracion,
+        horaFinCalculada: horaFin
       });
 
       const response = await fetch(`${API_URL}/api/reservations`, {
@@ -184,6 +196,21 @@ const Reservaciones = () => {
 
       console.log('✅ Cita agendada exitosamente:', data);
       
+      // AÑADIR LA NUEVA RESERVA AL ESTADO DE RESERVAS
+      const nuevaReserva = {
+        _id: data._id,
+        fecha: fechaParaBackend, // Ya viene como string del backend
+        horaInicio: hora,
+        horaFin: data.horaFin || horaFin,
+        servicio: selectedService,
+        estado: 'confirmada'
+      };
+      
+      console.log('➕ Añadiendo nueva reserva al estado:', nuevaReserva);
+      
+      // Actualizar el estado de reservas inmediatamente
+      setReservas(prevReservas => [...prevReservas, nuevaReserva]);
+      
       setSuccess(`¡Cita agendada exitosamente para el ${fecha.toLocaleDateString('es-MX', { 
         weekday: 'long', 
         year: 'numeric', 
@@ -191,7 +218,7 @@ const Reservaciones = () => {
         day: 'numeric' 
       })} a las ${hora}! Recibirás un mensaje de confirmación por WhatsApp.`);
       
-      // Recargar datos
+      // También recargar datos del backend para asegurar consistencia
       cargarDisponibilidad();
       cargarMisReservas();
       
@@ -226,9 +253,14 @@ const Reservaciones = () => {
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
+      // Remover la reserva cancelada del estado local
+      setReservas(prevReservas => 
+        prevReservas.filter(reserva => reserva._id !== reservaId)
+      );
+      
       alert('✅ Cita cancelada exitosamente');
       cargarMisReservas();
-      cargarDisponibilidad();
+      cargarDisponibilidad(); // Recargar para asegurar consistencia
     } catch (err) {
       console.error('❌ Error cancelando reserva:', err);
       alert(`Error al cancelar la cita: ${err.message}`);
@@ -425,7 +457,7 @@ const Reservaciones = () => {
                                 disabled={ocupado || pasado || loading}
                                 className={`w-full h-12 rounded-lg transition-all duration-200 flex items-center justify-center ${
                                   ocupado
-                                    ? 'bg-red-100 text-red-700 border border-red-200 cursor-not-allowed'
+                                    ? 'bg-pink-100 text-pink-700 border border-pink-300 cursor-not-allowed' // Cambiado a rosa
                                     : pasado
                                     ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                     : 'bg-white hover:bg-primary/10 text-gray-700 hover:text-primary border border-gray-200 hover:border-primary cursor-pointer'
@@ -434,7 +466,7 @@ const Reservaciones = () => {
                               >
                                 {ocupado ? (
                                   <span className="flex items-center gap-1">
-                                    <XCircle className="w-4 h-4" />
+                                    <XCircle className="w-4 h-4 text-pink-600" /> {/* Cambiado a rosa */}
                                     <span className="text-xs hidden sm:inline">Ocupado</span>
                                   </span>
                                 ) : pasado ? (
@@ -462,7 +494,7 @@ const Reservaciones = () => {
                   <span className="text-sm text-gray-600">Disponible</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-red-100 border-2 border-red-200 rounded"></div>
+                  <div className="w-4 h-4 bg-pink-100 border-2 border-pink-300 rounded"></div> {/* Cambiado a rosa */}
                   <span className="text-sm text-gray-600">Ocupado</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -480,6 +512,7 @@ const Reservaciones = () => {
                     <ul className="text-sm text-blue-700 space-y-1">
                       <li>• Selecciona un horario disponible (verde)</li>
                       <li>• Haz clic en el botón verde para agendar</li>
+                      <li>• Los horarios agendados se marcarán en <span className="text-pink-600 font-medium">rosa</span></li> {/* Mencionar rosa */}
                       <li>• Recibirás un mensaje de confirmación por WhatsApp</li>
                       <li>• Puedes cancelar tu cita desde "Mis Citas"</li>
                     </ul>

@@ -41,7 +41,7 @@ const Home = () => {
             <div className="text-center">
               {/* Título en rosa y cursiva */}
               <h1 className="text-5xl md:text-7xl font-alex-brush text-pink-500 italic mb-4">
-                Soumaya Beauty Bar
+                Soumaya Beauty Salon
               </h1>
               {/* Subtítulo en negro */}
               <p className="text-xl md:text-2xl mb-8 text-black">

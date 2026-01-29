@@ -39,9 +39,19 @@ const Reservaciones = () => {
     cargarMisReservas();
   }, [currentWeekStart, selectedService]);
 
+  // Función para formatear fecha a YYYY-MM-DD sin problemas de zona horaria
+  const formatDateToYMD = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0); // Normalizar a medianoche
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const cargarDisponibilidad = async () => {
     try {
-      const fechaISO = currentWeekStart.toISOString().split('T')[0];
+      const fechaISO = formatDateToYMD(currentWeekStart);
       const response = await fetch(
         `${API_URL}/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
         {
@@ -84,12 +94,18 @@ const Reservaciones = () => {
 
   const generarDiasSemana = () => {
     const dias = [];
+    // Crear una fecha de inicio normalizada (sin horas/minutos/segundos)
     const inicio = new Date(currentWeekStart);
     inicio.setHours(0, 0, 0, 0);
+    // Ajustar al inicio de la semana (lunes)
+    const dayOfWeek = inicio.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1; // Si es domingo, ir al lunes anterior
+    inicio.setDate(inicio.getDate() - (dayOfWeek - diff));
 
     for (let i = 0; i < 7; i++) {
       const fecha = new Date(inicio);
       fecha.setDate(inicio.getDate() + i);
+      fecha.setHours(0, 0, 0, 0); // Asegurar que sea medianoche
       dias.push(fecha);
     }
     return dias;
@@ -97,10 +113,14 @@ const Reservaciones = () => {
 
   const estaOcupado = (fecha, hora) => {
     return reservas.some((reserva) => {
-      const fechaReserva = new Date(reserva.fecha).toDateString();
-      const fechaSeleccionada = fecha.toDateString();
+      const fechaReserva = new Date(reserva.fecha);
+      fechaReserva.setHours(0, 0, 0, 0);
+      
+      const fechaSeleccionada = new Date(fecha);
+      fechaSeleccionada.setHours(0, 0, 0, 0);
+      
       return (
-        fechaReserva === fechaSeleccionada &&
+        fechaReserva.getTime() === fechaSeleccionada.getTime() &&
         reserva.horaInicio <= hora &&
         reserva.horaFin > hora
       );
@@ -117,7 +137,21 @@ const Reservaciones = () => {
     setError('');
 
     try {
-      const fechaISO = fecha.toISOString().split('T')[0];
+      // Crear una copia de la fecha y establecer la hora correcta
+      const fechaConHora = new Date(fecha);
+      const [horas, minutos] = hora.split(':').map(Number);
+      fechaConHora.setHours(horas, minutos, 0, 0);
+      
+      // Enviar la fecha formateada correctamente
+      const fechaISO = formatDateToYMD(fechaConHora);
+      
+      console.log('Agendando cita:', {
+        fechaOriginal: fecha.toISOString(),
+        fechaConHora: fechaConHora.toISOString(),
+        fechaISO: fechaISO,
+        hora: hora
+      });
+
       const response = await fetch(`${API_URL}/api/reservations`, {
         method: 'POST',
         headers: {
@@ -141,7 +175,8 @@ const Reservaciones = () => {
       cargarDisponibilidad();
       cargarMisReservas();
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Error al agendar la cita');
+      console.error('Error agendando cita:', err);
     } finally {
       setLoading(false);
     }
@@ -149,7 +184,8 @@ const Reservaciones = () => {
 
   const cambiarSemana = (direccion) => {
     const nuevaFecha = new Date(currentWeekStart);
-    nuevaFecha.setDate(nuevaFecha.getDate() + direccion * 7);
+    nuevaFecha.setDate(nuevaFecha.getDate() + (direccion * 7));
+    nuevaFecha.setHours(0, 0, 0, 0);
     setCurrentWeekStart(nuevaFecha);
   };
 
@@ -175,6 +211,10 @@ const Reservaciones = () => {
       alert('Error al cancelar la cita');
     }
   };
+
+  // Crear fecha de hoy para comparación
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
 
   const horarios = generarHorarios();
   const diasSemana = generarDiasSemana();
@@ -235,7 +275,14 @@ const Reservaciones = () => {
                   <ChevronLeft className="w-6 h-6" />
                 </button>
                 <h3 className="text-xl font-semibold text-primary">
-                  {currentWeekStart.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })}
+                  {diasSemana[0].toLocaleDateString('es-MX', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                  })} - 
+                  {diasSemana[6].toLocaleDateString('es-MX', { 
+                    day: 'numeric',
+                    month: 'long' 
+                  })}
                 </h3>
                 <button
                   onClick={() => cambiarSemana(1)}
@@ -257,14 +304,20 @@ const Reservaciones = () => {
                   <thead>
                     <tr>
                       <th className="p-2 border border-border bg-muted">Hora</th>
-                      {diasSemana.map((dia, idx) => (
-                        <th key={idx} className="p-2 border border-border bg-muted">
-                          <div className="text-sm text-foreground">
-                            {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
-                          </div>
-                          <div className="font-bold text-primary">{dia.getDate()}</div>
-                        </th>
-                      ))}
+                      {diasSemana.map((dia, idx) => {
+                        const fechaFormateada = formatDateToYMD(dia);
+                        return (
+                          <th key={idx} className="p-2 border border-border bg-muted">
+                            <div className="text-sm text-foreground">
+                              {dia.toLocaleDateString('es-MX', { weekday: 'short' })}
+                            </div>
+                            <div className="font-bold text-primary">{dia.getDate()}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {fechaFormateada}
+                            </div>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -275,7 +328,12 @@ const Reservaciones = () => {
                         </td>
                         {diasSemana.map((dia, idx) => {
                           const ocupado = estaOcupado(dia, hora);
-                          const pasado = new Date(dia.toDateString() + ' ' + hora) < new Date();
+                          
+                          // Verificar si la fecha/hora ya pasó
+                          const fechaHoraSeleccionada = new Date(dia);
+                          const [horas, minutos] = hora.split(':').map(Number);
+                          fechaHoraSeleccionada.setHours(horas, minutos, 0, 0);
+                          const pasado = fechaHoraSeleccionada < new Date();
 
                           return (
                             <td
@@ -293,7 +351,7 @@ const Reservaciones = () => {
                                     : 'bg-card hover:bg-primary/20 cursor-pointer border border-input'
                                 }`}
                               >
-                                {ocupado ? '🚫' : ''}
+                                {ocupado ? '🚫' : pasado ? '✗' : '✓'}
                               </button>
                             </td>
                           );
@@ -306,12 +364,16 @@ const Reservaciones = () => {
 
               <div className="mt-4 flex gap-4 text-sm text-foreground">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-card border border-input rounded"></div>
+                  <div className="w-6 h-6 bg-card border border-input rounded flex items-center justify-center">✓</div>
                   <span>Disponible</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-primary rounded"></div>
+                  <div className="w-6 h-6 bg-primary rounded flex items-center justify-center">🚫</div>
                   <span>Ocupado</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-muted rounded flex items-center justify-center">✗</div>
+                  <span>Pasado</span>
                 </div>
               </div>
             </div>

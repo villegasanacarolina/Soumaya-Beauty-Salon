@@ -2,22 +2,11 @@
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-    // CORREGIDO: NO uses "./src/**/*" que incluye node_modules
+    "./src/**/*.{js,jsx,ts,tsx}", // ← ¡SOLO esto!
+    // NO incluyas `./src/**/*.ts` por separado
   ],
   theme: {
-    extend: {
-      colors: {
-        primary: {
-          DEFAULT: '#d4a574',
-          foreground: '#ffffff',
-        },
-      },
-      fontFamily: {
-        'alex-brush': ['Alex Brush', 'cursive'],
-        'montserrat': ['Montserrat', 'sans-serif'],
-      },
-    },
+    extend: {},
   },
   plugins: [],
 }

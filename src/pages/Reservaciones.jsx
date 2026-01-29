@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut } from 'lucide-react';
+import API_URL from '../config/api';
 
 const serviceDurations = {
   'unas-gel': { duracion: 60, nombre: 'Uñas de Gel', precio: 450 },
@@ -23,7 +24,6 @@ const Reservaciones = () => {
   const [misReservas, setMisReservas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -42,7 +42,7 @@ const Reservaciones = () => {
     try {
       const fechaISO = currentWeekStart.toISOString().split('T')[0];
       const response = await fetch(
-        `http://localhost:5000/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
+        `${API_URL}/api/reservations/availability/${fechaISO}?servicio=${selectedService}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -58,7 +58,7 @@ const Reservaciones = () => {
 
   const cargarMisReservas = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/reservations/my-reservations', {
+      const response = await fetch(`${API_URL}/api/reservations/my-reservations`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -117,7 +117,7 @@ const Reservaciones = () => {
 
     try {
       const fechaISO = fecha.toISOString().split('T')[0];
-      const response = await fetch('http://localhost:5000/api/reservations', {
+      const response = await fetch(`${API_URL}/api/reservations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,7 +158,7 @@ const Reservaciones = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/reservations/${reservaId}/cancel`, {
+      const response = await fetch(`${API_URL}/api/reservations/${reservaId}/cancel`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,

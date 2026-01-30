@@ -19,13 +19,12 @@ const reservationSchema = new mongoose.Schema({
     required: true,
     enum: ['unas-gel', 'unas-acrilicas', 'pedicure', 'keratina', 'tinte', 'pestanas', 'cejas']
   },
-  // CAMBIO IMPORTANTE: Cambiar Date por String
   fecha: {
-    type: String,  // Cambia Date por String
+    type: String,
     required: true,
     validate: {
       validator: function(v) {
-        return /^\d{4}-\d{2}-\d{2}$/.test(v); // Acepta solo YYYY-MM-DD
+        return /^\d{4}-\d{2}-\d{2}$/.test(v);
       },
       message: 'Formato de fecha inválido. Use YYYY-MM-DD'
     }
@@ -57,13 +56,16 @@ const reservationSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  googleCalendarEventId: {
+    type: String,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-// Actualizar el índice para usar String en lugar de Date
 reservationSchema.index({ fecha: 1, horaInicio: 1 }, { unique: true });
 
 export default mongoose.model('Reservation', reservationSchema);

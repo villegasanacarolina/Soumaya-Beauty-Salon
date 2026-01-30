@@ -1,5 +1,20 @@
 import Reservation from '../models/Reservation.js';
 import { enviarConfirmacionCita, serviceDurations } from '../utils/twilioService.js';
+import { google } from 'googleapis';
+
+// Configurar Google Calendar
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
+
+// Set credentials (necesitarás el refresh token)
+oauth2Client.setCredentials({
+  refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+});
+
+const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
 const calcularHoraFin = (horaInicio, duracionMinutos) => {
   const [horas, minutos] = horaInicio.split(':').map(Number);
@@ -9,19 +24,11 @@ const calcularHoraFin = (horaInicio, duracionMinutos) => {
   return `${String(nuevasHoras).padStart(2, '0')}:${String(nuevosMinutos).padStart(2, '0')}`;
 };
 
-// Función para convertir fecha string a Date para consultas
-const stringToDate = (fechaString) => {
-  const [year, month, day] = fechaString.split('-').map(Number);
-  // Crear fecha en UTC a mediodía para evitar problemas de zona horaria
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-};
-
 const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   const horaFin = calcularHoraFin(horaInicio, duracion);
   
-  // Ahora fecha es string (YYYY-MM-DD), usarlo directamente
   const reservasExistentes = await Reservation.find({
-    fecha: fecha, // Usar string directamente
+    fecha: fecha,
     estado: { $ne: 'cancelada' },
     $or: [
       {
@@ -48,22 +55,63 @@ const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   return reservasExistentes.length === 0;
 };
 
+// Crear evento en Google Calendar
+const crearEventoCalendar = async (reserva, nombreCliente, telefonoCliente) => {
+  try {
+    const [year, month, day] = reserva.fecha.split('-').map(Number);
+    const [horaInicio, minInicio] = reserva.horaInicio.split(':').map(Number);
+    const [horaFin, minFin] = reserva.horaFin.split(':').map(Number);
+
+    const inicio = new Date(year, month - 1, day, horaInicio, minInicio);
+    const fin = new Date(year, month - 1, day, horaFin, minFin);
+
+    const servicioInfo = serviceDurations[reserva.servicio];
+
+    const evento = {
+      summary: `${servicioInfo.nombre} - ${nombreCliente}`,
+      description: `Cliente: ${nombreCliente}\nTeléfono: ${telefonoCliente}\nServicio: ${servicioInfo.nombre}\nDuración: ${reserva.duracion} minutos`,
+      start: {
+        dateTime: inicio.toISOString(),
+        timeZone: 'America/Mexico_City',
+      },
+      end: {
+        dateTime: fin.toISOString(),
+        timeZone: 'America/Mexico_City',
+      },
+      colorId: '10', // Verde
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 24 * 60 }, // 1 día antes
+          { method: 'popup', minutes: 60 }, // 1 hora antes
+        ],
+      },
+    };
+
+    const response = await calendar.events.insert({
+      calendarId: 'carovillegass13@gmail.com',
+      resource: evento,
+    });
+
+    console.log('✅ Evento creado en Google Calendar:', response.data.id);
+    return response.data.id;
+  } catch (error) {
+    console.error('❌ Error creando evento en Google Calendar:', error.message);
+    // No lanzar error para no bloquear la reserva
+    return null;
+  }
+};
+
 export const createReservation = async (req, res) => {
   try {
     const { servicio, fecha, horaInicio } = req.body;
 
-    console.log('📅 CREATE RESERVATION - Recibido:', {
-      servicio,
-      fecha, // Esto debería ser "2024-01-15"
-      horaInicio,
-      bodyCompleto: req.body
-    });
+    console.log('📅 CREATE RESERVATION:', { servicio, fecha, horaInicio });
 
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
     }
 
-    // Validar formato de fecha
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
       return res.status(400).json({ 
         message: 'Formato de fecha inválido. Use YYYY-MM-DD' 
@@ -73,7 +121,6 @@ export const createReservation = async (req, res) => {
     const duracion = serviceDurations[servicio].duracion;
     const horaFin = calcularHoraFin(horaInicio, duracion);
 
-    // Validar horario de trabajo (10:00 - 20:00)
     const [horaInicioNum] = horaInicio.split(':').map(Number);
     const [horaFinNum] = horaFin.split(':').map(Number);
 
@@ -83,7 +130,6 @@ export const createReservation = async (req, res) => {
       });
     }
 
-    // Verificar disponibilidad usando fecha como string
     const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
 
     if (!disponible) {
@@ -92,25 +138,32 @@ export const createReservation = async (req, res) => {
       });
     }
 
-    // Crear la reserva con fecha como string
+    // Crear la reserva
     const reservation = await Reservation.create({
       usuario: req.user._id,
       nombreCliente: req.user.nombreCompleto,
       telefonoCliente: req.user.telefono,
       servicio,
-      fecha: fecha, // Guardar como string "2024-01-15"
+      fecha: fecha,
       horaInicio,
       horaFin,
       duracion,
       estado: 'confirmada'
     });
 
-    console.log('✅ RESERVA CREADA:', {
-      id: reservation._id,
-      fechaGuardada: reservation.fecha, // Debería ser "2024-01-15"
-      horaInicio: reservation.horaInicio,
-      servicio: reservation.servicio
-    });
+    console.log('✅ RESERVA CREADA:', reservation._id);
+
+    // Crear evento en Google Calendar
+    const googleEventId = await crearEventoCalendar(
+      reservation,
+      req.user.nombreCompleto,
+      req.user.telefono
+    );
+
+    if (googleEventId) {
+      reservation.googleCalendarEventId = googleEventId;
+      await reservation.save();
+    }
 
     // Enviar WhatsApp
     try {
@@ -118,11 +171,13 @@ export const createReservation = async (req, res) => {
         req.user.telefono,
         req.user.nombreCompleto,
         servicio,
-        fecha, // Enviar la fecha como string
+        fecha,
         horaInicio
       );
+      console.log('✅ WhatsApp enviado correctamente');
     } catch (twilioError) {
-      console.error('❌ Error enviando WhatsApp:', twilioError);
+      console.error('❌ Error enviando WhatsApp:', twilioError.message);
+      // Continuar aunque falle el WhatsApp
     }
 
     res.status(201).json({
@@ -132,7 +187,6 @@ export const createReservation = async (req, res) => {
   } catch (error) {
     console.error('❌ ERROR en createReservation:', error);
     
-    // Manejar error de duplicado
     if (error.code === 11000) {
       return res.status(400).json({ 
         message: 'Este horario ya está reservado' 
@@ -148,37 +202,27 @@ export const createReservation = async (req, res) => {
 
 export const getWeekAvailability = async (req, res) => {
   try {
-    const { fecha } = req.params; // "2024-01-15"
-    const { servicio } = req.query;
+    const { fecha } = req.params;
 
-    console.log('📊 GET AVAILABILITY - Parámetros:', { fecha, servicio });
+    console.log('📊 GET AVAILABILITY:', { fecha });
 
-    if (!serviceDurations[servicio]) {
-      return res.status(400).json({ message: 'Servicio inválido' });
-    }
-
-    // Validar formato de fecha base
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
       return res.status(400).json({ 
         message: 'Formato de fecha inválido' 
       });
     }
 
-    // Obtener todas las reservas de la semana
-    // Como fecha es string, necesitamos calcular el rango de strings
     const [year, month, day] = fecha.split('-').map(Number);
     const baseDate = new Date(Date.UTC(year, month - 1, day));
     
     const fechaInicio = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     
-    // Calcular fecha fin (6 días después)
     const fechaFinDate = new Date(baseDate);
     fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + 6);
     const fechaFin = `${fechaFinDate.getUTCFullYear()}-${String(fechaFinDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaFinDate.getUTCDate()).padStart(2, '0')}`;
 
-    console.log('📅 Rango de búsqueda:', { fechaInicio, fechaFin });
+    console.log('📅 Rango:', { fechaInicio, fechaFin });
 
-    // Buscar todas las reservas en el rango
     const reservas = await Reservation.find({
       fecha: { 
         $gte: fechaInicio, 
@@ -201,22 +245,21 @@ export const getWeekAvailability = async (req, res) => {
 
 export const getUserReservations = async (req, res) => {
   try {
-    console.log('👤 GET USER RESERVATIONS para usuario:', req.user._id);
+    console.log('👤 GET USER RESERVATIONS:', req.user._id);
     
     const reservations = await Reservation.find({ 
       usuario: req.user._id 
     }).sort({ 
-      fecha: -1,  // Ordenar por fecha descendente
+      fecha: -1,
       horaInicio: -1 
     });
     
     console.log(`📋 Encontradas ${reservations.length} reservas`);
     
-    // Formatear respuesta
     const reservasFormateadas = reservations.map(reserva => ({
       _id: reserva._id,
       servicio: reserva.servicio,
-      fecha: reserva.fecha, // Ya es string "YYYY-MM-DD"
+      fecha: reserva.fecha,
       horaInicio: reserva.horaInicio,
       horaFin: reserva.horaFin,
       duracion: reserva.duracion,
@@ -247,7 +290,7 @@ export const getUserReservations = async (req, res) => {
 
 export const cancelReservation = async (req, res) => {
   try {
-    console.log('❌ CANCEL RESERVATION ID:', req.params.id);
+    console.log('❌ CANCEL RESERVATION:', req.params.id);
     
     const reservation = await Reservation.findById(req.params.id);
 
@@ -261,6 +304,19 @@ export const cancelReservation = async (req, res) => {
 
     reservation.estado = 'cancelada';
     await reservation.save();
+
+    // Eliminar de Google Calendar si existe
+    if (reservation.googleCalendarEventId) {
+      try {
+        await calendar.events.delete({
+          calendarId: 'carovillegass13@gmail.com',
+          eventId: reservation.googleCalendarEventId,
+        });
+        console.log('✅ Evento eliminado de Google Calendar');
+      } catch (error) {
+        console.error('❌ Error eliminando evento de Calendar:', error.message);
+      }
+    }
 
     console.log('✅ Reserva cancelada:', reservation._id);
     

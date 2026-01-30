@@ -14,7 +14,7 @@ const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   
   const reservasExistentes = await Reservation.find({
     fecha: fecha,
-    estado: { $ne: 'cancelada' },
+    estado: 'confirmada', // Solo verificar confirmadas
     $or: [
       {
         $and: [
@@ -44,7 +44,7 @@ export const createReservation = async (req, res) => {
   try {
     const { servicio, fecha, horaInicio } = req.body;
 
-    console.log('📅 CREATE RESERVATION:', { servicio, fecha, horaInicio, userId: req.user._id });
+    console.log('📅 CREATE RESERVATION:', { servicio, fecha, horaInicio, user: req.user.nombreCompleto });
 
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
@@ -86,7 +86,7 @@ export const createReservation = async (req, res) => {
 
     console.log('✅ RESERVA CREADA:', reservation._id);
 
-    // Enviar WhatsApp (no bloquear si falla)
+    // Enviar WhatsApp
     try {
       await enviarConfirmacionCita(
         req.user.telefono,
@@ -102,7 +102,7 @@ export const createReservation = async (req, res) => {
 
     res.status(201).json(reservation);
   } catch (error) {
-    console.error('❌ ERROR en createReservation:', error);
+    console.error('❌ ERROR:', error);
     
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Este horario ya está reservado' });
@@ -115,8 +115,6 @@ export const createReservation = async (req, res) => {
 export const getWeekAvailability = async (req, res) => {
   try {
     const { fecha } = req.params;
-
-    console.log('📊 GET AVAILABILITY:', { fecha });
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
       return res.status(400).json({ message: 'Formato de fecha inválido' });
@@ -131,12 +129,13 @@ export const getWeekAvailability = async (req, res) => {
     fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + 6);
     const fechaFin = `${fechaFinDate.getUTCFullYear()}-${String(fechaFinDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaFinDate.getUTCDate()).padStart(2, '0')}`;
 
+    // Solo devolver reservas CONFIRMADAS
     const reservas = await Reservation.find({
       fecha: { $gte: fechaInicio, $lte: fechaFin },
-      estado: { $ne: 'cancelada' }
+      estado: 'confirmada' // IMPORTANTE: Solo confirmadas
     });
 
-    console.log('🔍 Reservas encontradas:', reservas.length);
+    console.log(`🔍 Reservas confirmadas: ${reservas.length}`);
     
     res.json(reservas);
   } catch (error) {
@@ -147,8 +146,6 @@ export const getWeekAvailability = async (req, res) => {
 
 export const getUserReservations = async (req, res) => {
   try {
-    console.log('👤 GET USER RESERVATIONS:', req.user._id);
-    
     const reservations = await Reservation.find({ 
       usuario: req.user._id 
     }).sort({ fecha: -1, horaInicio: -1 });
@@ -184,8 +181,6 @@ export const getUserReservations = async (req, res) => {
 
 export const cancelReservation = async (req, res) => {
   try {
-    console.log('❌ CANCEL RESERVATION:', req.params.id);
-    
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
@@ -199,11 +194,34 @@ export const cancelReservation = async (req, res) => {
     reservation.estado = 'cancelada';
     await reservation.save();
 
-    console.log('✅ Reserva cancelada');
+    console.log('✅ Reserva cancelada:', reservation._id);
     
     res.json({ message: 'Reserva cancelada', reservation });
   } catch (error) {
     console.error('❌ ERROR:', error);
     res.status(500).json({ message: 'Error al cancelar reserva' });
+  }
+};
+
+export const deleteReservation = async (req, res) => {
+  try {
+    const reservation = await Reservation.findById(req.params.id);
+
+    if (!reservation) {
+      return res.status(404).json({ message: 'Reservación no encontrada' });
+    }
+
+    if (reservation.usuario.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'No autorizado' });
+    }
+
+    await Reservation.findByIdAndDelete(req.params.id);
+
+    console.log('🗑️ Reserva eliminada del historial:', req.params.id);
+    
+    res.json({ message: 'Reserva eliminada del historial' });
+  } catch (error) {
+    console.error('❌ ERROR:', error);
+    res.status(500).json({ message: 'Error al eliminar reserva' });
   }
 };

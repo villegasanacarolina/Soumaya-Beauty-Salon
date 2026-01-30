@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut, XCircle, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut, X, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 
 const API_URL = 'https://soumaya-beauty-salon.onrender.com';
 
@@ -36,7 +36,7 @@ const Toast = ({ message, type, onClose }) => {
   const Icon = type === 'success' ? CheckCircle : AlertCircle;
 
   return (
-    <div className={`fixed top-24 right-4 z-50 max-w-md w-full ${bgColor} border-2 rounded-xl shadow-2xl p-4 animate-in slide-in-from-top-5`}>
+    <div className={`fixed top-24 right-4 z-50 max-w-md w-full ${bgColor} border-2 rounded-xl shadow-2xl p-4`}>
       <div className="flex items-start gap-3">
         <Icon className={`w-5 h-5 ${iconColor} flex-shrink-0 mt-0.5`} />
         <div className="flex-1">
@@ -79,7 +79,7 @@ const Reservaciones = () => {
   useEffect(() => {
     cargarDisponibilidad();
     cargarMisReservas();
-  }, [currentWeekStart, selectedService]);
+  }, [currentWeekStart]);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -118,7 +118,7 @@ const Reservaciones = () => {
   const cargarDisponibilidad = async () => {
     try {
       const fechaISO = formatDateToYMD(currentWeekStart);
-      console.log('📅 Cargando disponibilidad para:', fechaISO);
+      console.log('📅 Cargando disponibilidad:', fechaISO);
       
       const response = await fetch(
         `${API_URL}/api/reservations/availability/${fechaISO}`,
@@ -134,7 +134,8 @@ const Reservaciones = () => {
       }
       
       const data = await response.json();
-      console.log('✅ Reservas cargadas:', data);
+      console.log('✅ Reservas encontradas:', data.length);
+      console.log('📋 Detalle de reservas:', data);
       setReservas(data);
     } catch (err) {
       console.error('❌ Error cargando disponibilidad:', err);
@@ -154,10 +155,10 @@ const Reservaciones = () => {
       }
       
       const data = await response.json();
-      console.log('📋 Mis reservas:', data);
+      console.log('👤 Mis reservas:', data);
       setMisReservas(data);
     } catch (err) {
-      console.error('❌ Error cargando reservas:', err);
+      console.error('❌ Error cargando mis reservas:', err);
     }
   };
 
@@ -187,7 +188,7 @@ const Reservaciones = () => {
   const estaOcupado = (fecha, hora) => {
     const fechaStr = formatDateToYMD(fecha);
     
-    return reservas.some((reserva) => {
+    const ocupado = reservas.some((reserva) => {
       const reservaFecha = typeof reserva.fecha === 'string' 
         ? reserva.fecha 
         : formatDateToYMD(new Date(reserva.fecha));
@@ -195,8 +196,16 @@ const Reservaciones = () => {
       if (reservaFecha !== fechaStr) return false;
       
       const horasOcupadas = obtenerHorasOcupadas(reserva);
-      return horasOcupadas.includes(hora);
+      const resultado = horasOcupadas.includes(hora);
+      
+      if (resultado) {
+        console.log(`🚫 Ocupado: ${fechaStr} ${hora} por reserva ${reserva._id}`);
+      }
+      
+      return resultado;
     });
+    
+    return ocupado;
   };
 
   const getReservaInfo = (fecha, hora) => {
@@ -238,7 +247,8 @@ const Reservaciones = () => {
       console.log('🖱️ Agendando cita:', {
         fecha: fechaParaBackend,
         hora: hora,
-        servicio: selectedService
+        servicio: selectedService,
+        usuario: user.nombreCompleto
       });
 
       const response = await fetch(`${API_URL}/api/reservations`, {
@@ -260,23 +270,22 @@ const Reservaciones = () => {
         throw new Error(data.message || `Error ${response.status}`);
       }
 
-      console.log('✅ Cita creada:', data);
+      console.log('✅ Cita creada exitosamente:', data);
       
       showToast(
         `¡Cita agendada! ${fecha.toLocaleDateString('es-MX', { 
           weekday: 'long', 
           day: 'numeric',
           month: 'long'
-        })} a las ${hora}. Confirmación enviada por WhatsApp.`,
+        })} a las ${hora}`,
         'success'
       );
       
-      // Recargar inmediatamente
-      await cargarDisponibilidad();
-      await cargarMisReservas();
+      // Recargar datos inmediatamente
+      await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
       
     } catch (err) {
-      console.error('❌ Error:', err);
+      console.error('❌ Error agendando:', err);
       showToast(err.message || 'Error al agendar la cita', 'error');
     } finally {
       setLoading(false);
@@ -290,13 +299,15 @@ const Reservaciones = () => {
   };
 
   const cancelarReserva = async (reservaId) => {
-    if (!window.confirm('¿Estás segura de que deseas cancelar esta cita?')) {
+    if (!window.confirm('¿Estás segura de cancelar esta cita?')) {
       return;
     }
 
     setLoading(true);
 
     try {
+      console.log('❌ Cancelando reserva:', reservaId);
+      
       const response = await fetch(`${API_URL}/api/reservations/${reservaId}/cancel`, {
         method: 'PUT',
         headers: {
@@ -308,17 +319,46 @@ const Reservaciones = () => {
         throw new Error(`Error ${response.status}`);
       }
 
-      console.log('✅ Cita cancelada');
+      console.log('✅ Cita cancelada exitosamente');
       
-      showToast('Cita cancelada exitosamente', 'success');
+      showToast('Cita cancelada. El horario está disponible nuevamente.', 'success');
       
-      // Recargar inmediatamente
-      await cargarDisponibilidad();
+      // Recargar datos inmediatamente
+      await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
+      
+    } catch (err) {
+      console.error('❌ Error cancelando:', err);
+      showToast(`Error al cancelar: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const eliminarDelHistorial = async (reservaId) => {
+    if (!window.confirm('¿Eliminar esta cita del historial?')) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/api/reservations/${reservaId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}`);
+      }
+
+      showToast('Cita eliminada del historial', 'success');
       await cargarMisReservas();
       
     } catch (err) {
-      console.error('❌ Error:', err);
-      showToast(`Error al cancelar: ${err.message}`, 'error');
+      console.error('❌ Error eliminando:', err);
+      showToast(`Error: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -384,7 +424,6 @@ const Reservaciones = () => {
                 disabled={loading}
               >
                 <ChevronLeft className="w-5 h-5" />
-                <span className="hidden sm:inline">Anterior</span>
               </button>
               
               <div className="text-center">
@@ -399,7 +438,6 @@ const Reservaciones = () => {
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90"
                 disabled={loading}
               >
-                <span className="hidden sm:inline">Siguiente</span>
                 <ChevronRight className="w-5 h-5" />
               </button>
             </div>
@@ -419,9 +457,6 @@ const Reservaciones = () => {
                           <div className={`text-xl font-bold mt-1 ${esHoy ? 'text-primary' : 'text-foreground'}`}>
                             {dia.getDate()}
                           </div>
-                          {esHoy && (
-                            <span className="inline-block px-2 py-0.5 text-xs bg-primary text-white rounded-full mt-1">Hoy</span>
-                          )}
                         </th>
                       );
                     })}
@@ -446,14 +481,14 @@ const Reservaciones = () => {
                             <button
                               onClick={() => !ocupado && !pasado && agendarCita(dia, hora)}
                               disabled={ocupado || pasado || loading}
-                              className={`w-full h-12 rounded-lg transition-all flex items-center justify-center ${
+                              className={`w-full h-12 rounded-lg transition-all flex items-center justify-center font-bold text-lg ${
                                 ocupado
-                                  ? 'bg-primary text-white cursor-not-allowed'
+                                  ? 'bg-[#D98FA0] text-white cursor-not-allowed'
                                   : pasado
                                   ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                                  : 'bg-card hover:bg-primary/10 text-foreground hover:text-primary border border-border hover:border-primary cursor-pointer'
+                                  : 'bg-card hover:bg-primary/10 text-foreground hover:text-primary border-2 border-border hover:border-primary cursor-pointer'
                               } ${loading ? 'opacity-50' : ''}`}
-                              title={ocupado ? `Ocupado: ${serviceDurations[reservaInfo.servicio]?.nombre}` : 'Disponible'}
+                              title={ocupado ? `Ocupado: ${serviceDurations[reservaInfo?.servicio]?.nombre}` : 'Disponible'}
                             >
                               {ocupado ? '🚫' : pasado ? '✗' : '✓'}
                             </button>
@@ -468,15 +503,15 @@ const Reservaciones = () => {
 
             <div className="mt-6 flex flex-wrap gap-4 items-center justify-center">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-card border-2 border-border rounded"></div>
+                <div className="w-6 h-6 bg-card border-2 border-border rounded"></div>
                 <span className="text-sm text-foreground">Disponible</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-primary rounded"></div>
+                <div className="w-6 h-6 bg-[#D98FA0] rounded"></div>
                 <span className="text-sm text-foreground">Ocupado</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-muted rounded"></div>
+                <div className="w-6 h-6 bg-muted rounded"></div>
                 <span className="text-sm text-foreground">No disponible</span>
               </div>
             </div>
@@ -499,27 +534,50 @@ const Reservaciones = () => {
           ) : (
             <div className="space-y-4">
               {misReservas.map((reserva) => (
-                <div key={reserva._id} className="p-4 rounded-xl border-2 border-border bg-card">
+                <div key={reserva._id} className={`p-4 rounded-xl border-2 ${
+                  reserva.estado === 'confirmada' 
+                    ? 'border-green-200 bg-green-50 dark:bg-green-900/10' 
+                    : 'border-red-200 bg-red-50 dark:bg-red-900/10'
+                }`}>
                   <div className="flex flex-col md:flex-row justify-between gap-4">
                     <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          reserva.estado === 'confirmada'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                        }`}>
+                          {reserva.estado === 'confirmada' ? '✅ Confirmada' : '❌ Cancelada'}
+                        </span>
+                      </div>
                       <h3 className="font-bold text-lg text-primary mb-2">
                         {serviceDurations[reserva.servicio]?.nombre}
                       </h3>
-                      <div className="space-y-2 text-sm">
-                        <p className="text-foreground">📅 {reserva.fechaLegible || reserva.fecha}</p>
-                        <p className="text-foreground">⏰ {reserva.horaInicio} - {reserva.horaFin}</p>
-                        <p className="text-foreground">💰 ${serviceDurations[reserva.servicio]?.precio} MXN</p>
+                      <div className="space-y-1 text-sm text-foreground">
+                        <p>📅 {reserva.fechaLegible || reserva.fecha}</p>
+                        <p>⏰ {reserva.horaInicio} - {reserva.horaFin}</p>
+                        <p>💰 ${serviceDurations[reserva.servicio]?.precio} MXN</p>
                       </div>
                     </div>
-                    {reserva.estado === 'confirmada' && (
+                    <div className="flex gap-2">
+                      {reserva.estado === 'confirmada' && (
+                        <button
+                          onClick={() => cancelarReserva(reserva._id)}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium whitespace-nowrap"
+                          disabled={loading}
+                        >
+                          Cancelar Cita
+                        </button>
+                      )}
                       <button
-                        onClick={() => cancelarReserva(reserva._id)}
-                        className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90"
+                        onClick={() => eliminarDelHistorial(reserva._id)}
+                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                         disabled={loading}
+                        title="Eliminar del historial"
                       >
-                        Cancelar
+                        <Trash2 className="w-5 h-5" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               ))}

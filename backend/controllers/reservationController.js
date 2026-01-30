@@ -12,9 +12,16 @@ const calcularHoraFin = (horaInicio, duracionMinutos) => {
 const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   const horaFin = calcularHoraFin(horaInicio, duracion);
   
+  console.log('🔍 Verificando disponibilidad:', {
+    fecha,
+    horaInicio,
+    horaFin,
+    duracion
+  });
+  
   const reservasExistentes = await Reservation.find({
     fecha: fecha,
-    estado: 'confirmada', // Solo verificar confirmadas
+    estado: 'confirmada',
     $or: [
       {
         $and: [
@@ -37,6 +44,8 @@ const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
     ]
   });
 
+  console.log('📋 Reservas que interfieren:', reservasExistentes.length);
+  
   return reservasExistentes.length === 0;
 };
 
@@ -44,7 +53,12 @@ export const createReservation = async (req, res) => {
   try {
     const { servicio, fecha, horaInicio } = req.body;
 
-    console.log('📅 CREATE RESERVATION:', { servicio, fecha, horaInicio, user: req.user.nombreCompleto });
+    console.log('📅 ========== CREAR RESERVA ==========');
+    console.log('Usuario:', req.user.nombreCompleto);
+    console.log('Teléfono:', req.user.telefono);
+    console.log('Servicio:', servicio);
+    console.log('Fecha:', fecha);
+    console.log('Hora:', horaInicio);
 
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
@@ -56,6 +70,9 @@ export const createReservation = async (req, res) => {
 
     const duracion = serviceDurations[servicio].duracion;
     const horaFin = calcularHoraFin(horaInicio, duracion);
+
+    console.log('⏱️ Duración:', duracion, 'min');
+    console.log('🕐 Hora fin:', horaFin);
 
     const [horaInicioNum] = horaInicio.split(':').map(Number);
     const [horaFinNum] = horaFin.split(':').map(Number);
@@ -69,8 +86,11 @@ export const createReservation = async (req, res) => {
     const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
 
     if (!disponible) {
+      console.log('❌ Horario NO disponible');
       return res.status(400).json({ message: 'El horario ya está ocupado' });
     }
+
+    console.log('✅ Horario disponible, creando reserva...');
 
     const reservation = await Reservation.create({
       usuario: req.user._id,
@@ -84,9 +104,16 @@ export const createReservation = async (req, res) => {
       estado: 'confirmada'
     });
 
-    console.log('✅ RESERVA CREADA:', reservation._id);
+    console.log('✅ RESERVA CREADA EN BD:', {
+      id: reservation._id,
+      estado: reservation.estado,
+      fecha: reservation.fecha,
+      horaInicio: reservation.horaInicio,
+      horaFin: reservation.horaFin
+    });
 
     // Enviar WhatsApp
+    console.log('📱 Intentando enviar WhatsApp...');
     try {
       await enviarConfirmacionCita(
         req.user.telefono,
@@ -95,14 +122,16 @@ export const createReservation = async (req, res) => {
         fecha,
         horaInicio
       );
-      console.log('✅ WhatsApp enviado');
+      console.log('✅ WhatsApp enviado correctamente');
     } catch (twilioError) {
-      console.error('❌ Error WhatsApp:', twilioError.message);
+      console.error('❌ Error enviando WhatsApp:', twilioError.message);
+      // No fallar la reserva si falla WhatsApp
     }
 
+    console.log('========== FIN CREAR RESERVA ==========');
     res.status(201).json(reservation);
   } catch (error) {
-    console.error('❌ ERROR:', error);
+    console.error('❌ ERROR CRÍTICO:', error);
     
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Este horario ya está reservado' });
@@ -115,6 +144,9 @@ export const createReservation = async (req, res) => {
 export const getWeekAvailability = async (req, res) => {
   try {
     const { fecha } = req.params;
+
+    console.log('📊 ========== GET AVAILABILITY ==========');
+    console.log('Fecha solicitada:', fecha);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
       return res.status(400).json({ message: 'Formato de fecha inválido' });
@@ -129,13 +161,20 @@ export const getWeekAvailability = async (req, res) => {
     fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + 6);
     const fechaFin = `${fechaFinDate.getUTCFullYear()}-${String(fechaFinDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaFinDate.getUTCDate()).padStart(2, '0')}`;
 
-    // Solo devolver reservas CONFIRMADAS
+    console.log('📅 Rango de búsqueda:', { fechaInicio, fechaFin });
+
     const reservas = await Reservation.find({
       fecha: { $gte: fechaInicio, $lte: fechaFin },
-      estado: 'confirmada' // IMPORTANTE: Solo confirmadas
+      estado: 'confirmada'
     });
 
-    console.log(`🔍 Reservas confirmadas: ${reservas.length}`);
+    console.log(`✅ Reservas CONFIRMADAS encontradas: ${reservas.length}`);
+    
+    reservas.forEach(r => {
+      console.log(`   - ${r.fecha} ${r.horaInicio}-${r.horaFin} (${r.servicio}) - ID: ${r._id}`);
+    });
+    
+    console.log('========== FIN GET AVAILABILITY ==========');
     
     res.json(reservas);
   } catch (error) {
@@ -146,31 +185,36 @@ export const getWeekAvailability = async (req, res) => {
 
 export const getUserReservations = async (req, res) => {
   try {
+    console.log('👤 GET USER RESERVATIONS:', req.user._id);
+    
     const reservations = await Reservation.find({ 
       usuario: req.user._id 
     }).sort({ fecha: -1, horaInicio: -1 });
     
-    const reservasFormateadas = reservations.map(reserva => ({
-      _id: reserva._id,
-      servicio: reserva.servicio,
-      fecha: reserva.fecha,
-      horaInicio: reserva.horaInicio,
-      horaFin: reserva.horaFin,
-      duracion: reserva.duracion,
-      estado: reserva.estado,
-      nombreCliente: reserva.nombreCliente,
-      servicioNombre: serviceDurations[reserva.servicio]?.nombre,
-      fechaLegible: (() => {
-        const [year, month, day] = reserva.fecha.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-        return date.toLocaleDateString('es-MX', {
+    console.log(`📋 Total reservas del usuario: ${reservations.length}`);
+    
+    const reservasFormateadas = reservations.map(reserva => {
+      const [year, month, day] = reserva.fecha.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      
+      return {
+        _id: reserva._id,
+        servicio: reserva.servicio,
+        fecha: reserva.fecha,
+        horaInicio: reserva.horaInicio,
+        horaFin: reserva.horaFin,
+        duracion: reserva.duracion,
+        estado: reserva.estado,
+        nombreCliente: reserva.nombreCliente,
+        servicioNombre: serviceDurations[reserva.servicio]?.nombre,
+        fechaLegible: date.toLocaleDateString('es-MX', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
           day: 'numeric'
-        });
-      })()
-    }));
+        })
+      };
+    });
     
     res.json(reservasFormateadas);
   } catch (error) {
@@ -181,22 +225,36 @@ export const getUserReservations = async (req, res) => {
 
 export const cancelReservation = async (req, res) => {
   try {
+    console.log('❌ ========== CANCELAR RESERVA ==========');
+    console.log('ID:', req.params.id);
+    
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
+      console.log('❌ Reserva no encontrada');
       return res.status(404).json({ message: 'Reservación no encontrada' });
     }
 
     if (reservation.usuario.toString() !== req.user._id.toString()) {
+      console.log('❌ Usuario no autorizado');
       return res.status(403).json({ message: 'No autorizado' });
     }
 
+    console.log('Estado anterior:', reservation.estado);
     reservation.estado = 'cancelada';
     await reservation.save();
+    console.log('Estado nuevo:', reservation.estado);
 
-    console.log('✅ Reserva cancelada:', reservation._id);
+    console.log('✅ Reserva cancelada exitosamente');
+    console.log('========== FIN CANCELAR RESERVA ==========');
     
-    res.json({ message: 'Reserva cancelada', reservation });
+    res.json({ 
+      message: 'Reserva cancelada', 
+      reservation: {
+        _id: reservation._id,
+        estado: reservation.estado
+      }
+    });
   } catch (error) {
     console.error('❌ ERROR:', error);
     res.status(500).json({ message: 'Error al cancelar reserva' });
@@ -205,19 +263,25 @@ export const cancelReservation = async (req, res) => {
 
 export const deleteReservation = async (req, res) => {
   try {
+    console.log('🗑️ ========== ELIMINAR RESERVA ==========');
+    console.log('ID:', req.params.id);
+    
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
+      console.log('❌ Reserva no encontrada');
       return res.status(404).json({ message: 'Reservación no encontrada' });
     }
 
     if (reservation.usuario.toString() !== req.user._id.toString()) {
+      console.log('❌ Usuario no autorizado');
       return res.status(403).json({ message: 'No autorizado' });
     }
 
     await Reservation.findByIdAndDelete(req.params.id);
 
-    console.log('🗑️ Reserva eliminada del historial:', req.params.id);
+    console.log('✅ Reserva eliminada del historial');
+    console.log('========== FIN ELIMINAR RESERVA ==========');
     
     res.json({ message: 'Reserva eliminada del historial' });
   } catch (error) {

@@ -1,9 +1,18 @@
 import twilio from 'twilio';
 
-const client = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+const salonPhone = process.env.SALON_PHONE_NUMBER;
+
+console.log('🔧 Configuración Twilio:', {
+  accountSid: accountSid ? `${accountSid.slice(0, 10)}...` : 'NO CONFIGURADO',
+  authToken: authToken ? 'CONFIGURADO' : 'NO CONFIGURADO',
+  twilioPhone: twilioPhone || 'NO CONFIGURADO',
+  salonPhone: salonPhone || 'NO CONFIGURADO'
+});
+
+const client = twilio(accountSid, authToken);
 
 export const serviceDurations = {
   'unas-gel': { duracion: 60, nombre: 'Uñas de Gel' },
@@ -16,20 +25,21 @@ export const serviceDurations = {
 };
 
 export const enviarConfirmacionCita = async (telefono, nombreCliente, servicio, fecha, hora) => {
-  const servicioInfo = serviceDurations[servicio];
-  
-  // Formatear fecha
-  const [year, month, day] = fecha.split('-').map(Number);
-  const fechaObj = new Date(year, month - 1, day);
-  const fechaFormateada = fechaObj.toLocaleDateString('es-MX', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  try {
+    const servicioInfo = serviceDurations[servicio];
+    
+    // Formatear fecha
+    const [year, month, day] = fecha.split('-').map(Number);
+    const fechaObj = new Date(year, month - 1, day);
+    const fechaFormateada = fechaObj.toLocaleDateString('es-MX', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
 
-  // Mensaje para el cliente
-  const mensajeCliente = `Hola ${nombreCliente}! 🌸
+    // Mensaje para el cliente
+    const mensajeCliente = `Hola ${nombreCliente}! 🌸
 
 ¡Tu cita en Soumaya Beauty Bar ha sido confirmada!
 
@@ -38,12 +48,10 @@ export const enviarConfirmacionCita = async (telefono, nombreCliente, servicio, 
 💅 Servicio: ${servicioInfo.nombre}
 ⏱️ Duración: ${servicioInfo.duracion} minutos
 
-¡Te esperamos! 💖
+¡Te esperamos! 💖`;
 
-Si necesitas cancelar o reprogramar, por favor contáctanos con anticipación.`;
-
-  // Mensaje para el salón
-  const mensajeSalon = `🔔 Nueva cita agendada
+    // Mensaje para el salón
+    const mensajeSalon = `🔔 Nueva cita agendada
 
 👤 Cliente: ${nombreCliente}
 📱 Teléfono: ${telefono}
@@ -52,29 +60,34 @@ Si necesitas cancelar o reprogramar, por favor contáctanos con anticipación.`;
 💅 Servicio: ${servicioInfo.nombre}
 ⏱️ Duración: ${servicioInfo.duracion} minutos`;
 
-  try {
-    // Enviar mensaje al cliente
-    console.log('📤 Enviando WhatsApp al cliente:', telefono);
-    await client.messages.create({
+    console.log('📤 Enviando WhatsApp...');
+    console.log('Cliente:', telefono);
+    console.log('Salón:', salonPhone);
+
+    // Enviar al cliente
+    const mensajeClienteEnviado = await client.messages.create({
       body: mensajeCliente,
-      from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
+      from: `whatsapp:${twilioPhone}`,
       to: `whatsapp:${telefono}`
     });
-    console.log('✅ Mensaje enviado al cliente');
+    
+    console.log('✅ Mensaje enviado al cliente:', mensajeClienteEnviado.sid);
 
-    // Enviar mensaje al salón
-    console.log('📤 Enviando WhatsApp al salón:', process.env.SALON_PHONE_NUMBER);
-    await client.messages.create({
+    // Enviar al salón
+    const mensajeSalonEnviado = await client.messages.create({
       body: mensajeSalon,
-      from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
-      to: `whatsapp:${process.env.SALON_PHONE_NUMBER}`
+      from: `whatsapp:${twilioPhone}`,
+      to: `whatsapp:${salonPhone}`
     });
-    console.log('✅ Mensaje enviado al salón');
+    
+    console.log('✅ Mensaje enviado al salón:', mensajeSalonEnviado.sid);
 
     return { success: true };
   } catch (error) {
-    console.error('❌ Error enviando WhatsApp:', error.message);
-    console.error('Detalles:', error);
+    console.error('❌ Error completo Twilio:', error);
+    console.error('Código:', error.code);
+    console.error('Mensaje:', error.message);
+    console.error('Detalles:', error.moreInfo);
     throw error;
   }
 };
@@ -82,7 +95,6 @@ Si necesitas cancelar o reprogramar, por favor contáctanos con anticipación.`;
 export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fecha, hora) => {
   const servicioInfo = serviceDurations[servicio];
   
-  // Formatear fecha
   const [year, month, day] = fecha.split('-').map(Number);
   const fechaObj = new Date(year, month - 1, day);
   const fechaFormateada = fechaObj.toLocaleDateString('es-MX', {
@@ -102,15 +114,15 @@ Mañana tienes tu cita en Soumaya Beauty Bar:
 ⏰ ${hora}
 💅 ${servicioInfo.nombre}
 
-¡No olvides asistir! Si necesitas reagendar, contáctanos. 💖`;
+¡No olvides asistir! 💖`;
 
   try {
     await client.messages.create({
       body: mensaje,
-      from: `whatsapp:${process.env.TWILIO_PHONE_NUMBER}`,
+      from: `whatsapp:${twilioPhone}`,
       to: `whatsapp:${telefono}`
     });
-    console.log('✅ Recordatorio enviado a:', telefono);
+    console.log('✅ Recordatorio enviado');
     return { success: true };
   } catch (error) {
     console.error('❌ Error enviando recordatorio:', error);

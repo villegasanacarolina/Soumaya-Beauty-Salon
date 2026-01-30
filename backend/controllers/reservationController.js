@@ -1,20 +1,5 @@
 import Reservation from '../models/Reservation.js';
 import { enviarConfirmacionCita, serviceDurations } from '../utils/twilioService.js';
-import { google } from 'googleapis';
-
-// Configurar Google Calendar
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
-);
-
-// Set credentials (necesitarás el refresh token)
-oauth2Client.setCredentials({
-  refresh_token: process.env.GOOGLE_REFRESH_TOKEN
-});
-
-const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
 const calcularHoraFin = (horaInicio, duracionMinutos) => {
   const [horas, minutos] = horaInicio.split(':').map(Number);
@@ -55,67 +40,18 @@ const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   return reservasExistentes.length === 0;
 };
 
-// Crear evento en Google Calendar
-const crearEventoCalendar = async (reserva, nombreCliente, telefonoCliente) => {
-  try {
-    const [year, month, day] = reserva.fecha.split('-').map(Number);
-    const [horaInicio, minInicio] = reserva.horaInicio.split(':').map(Number);
-    const [horaFin, minFin] = reserva.horaFin.split(':').map(Number);
-
-    const inicio = new Date(year, month - 1, day, horaInicio, minInicio);
-    const fin = new Date(year, month - 1, day, horaFin, minFin);
-
-    const servicioInfo = serviceDurations[reserva.servicio];
-
-    const evento = {
-      summary: `${servicioInfo.nombre} - ${nombreCliente}`,
-      description: `Cliente: ${nombreCliente}\nTeléfono: ${telefonoCliente}\nServicio: ${servicioInfo.nombre}\nDuración: ${reserva.duracion} minutos`,
-      start: {
-        dateTime: inicio.toISOString(),
-        timeZone: 'America/Mexico_City',
-      },
-      end: {
-        dateTime: fin.toISOString(),
-        timeZone: 'America/Mexico_City',
-      },
-      colorId: '10', // Verde
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'popup', minutes: 24 * 60 }, // 1 día antes
-          { method: 'popup', minutes: 60 }, // 1 hora antes
-        ],
-      },
-    };
-
-    const response = await calendar.events.insert({
-      calendarId: 'carovillegass13@gmail.com',
-      resource: evento,
-    });
-
-    console.log('✅ Evento creado en Google Calendar:', response.data.id);
-    return response.data.id;
-  } catch (error) {
-    console.error('❌ Error creando evento en Google Calendar:', error.message);
-    // No lanzar error para no bloquear la reserva
-    return null;
-  }
-};
-
 export const createReservation = async (req, res) => {
   try {
     const { servicio, fecha, horaInicio } = req.body;
 
-    console.log('📅 CREATE RESERVATION:', { servicio, fecha, horaInicio });
+    console.log('📅 CREATE RESERVATION:', { servicio, fecha, horaInicio, userId: req.user._id });
 
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      return res.status(400).json({ 
-        message: 'Formato de fecha inválido. Use YYYY-MM-DD' 
-      });
+      return res.status(400).json({ message: 'Formato de fecha inválido' });
     }
 
     const duracion = serviceDurations[servicio].duracion;
@@ -126,25 +62,22 @@ export const createReservation = async (req, res) => {
 
     if (horaInicioNum < 10 || horaFinNum > 20) {
       return res.status(400).json({
-        message: `Horario no disponible. El salón opera de 10:00 AM a 8:00 PM`
+        message: 'Horario no disponible. El salón opera de 10:00 AM a 8:00 PM'
       });
     }
 
     const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
 
     if (!disponible) {
-      return res.status(400).json({ 
-        message: 'El horario seleccionado no está disponible' 
-      });
+      return res.status(400).json({ message: 'El horario ya está ocupado' });
     }
 
-    // Crear la reserva
     const reservation = await Reservation.create({
       usuario: req.user._id,
       nombreCliente: req.user.nombreCompleto,
       telefonoCliente: req.user.telefono,
       servicio,
-      fecha: fecha,
+      fecha,
       horaInicio,
       horaFin,
       duracion,
@@ -153,19 +86,7 @@ export const createReservation = async (req, res) => {
 
     console.log('✅ RESERVA CREADA:', reservation._id);
 
-    // Crear evento en Google Calendar
-    const googleEventId = await crearEventoCalendar(
-      reservation,
-      req.user.nombreCompleto,
-      req.user.telefono
-    );
-
-    if (googleEventId) {
-      reservation.googleCalendarEventId = googleEventId;
-      await reservation.save();
-    }
-
-    // Enviar WhatsApp
+    // Enviar WhatsApp (no bloquear si falla)
     try {
       await enviarConfirmacionCita(
         req.user.telefono,
@@ -174,29 +95,20 @@ export const createReservation = async (req, res) => {
         fecha,
         horaInicio
       );
-      console.log('✅ WhatsApp enviado correctamente');
+      console.log('✅ WhatsApp enviado');
     } catch (twilioError) {
-      console.error('❌ Error enviando WhatsApp:', twilioError.message);
-      // Continuar aunque falle el WhatsApp
+      console.error('❌ Error WhatsApp:', twilioError.message);
     }
 
-    res.status(201).json({
-      ...reservation.toObject(),
-      mensaje: `Cita agendada para el ${fecha} a las ${horaInicio}`
-    });
+    res.status(201).json(reservation);
   } catch (error) {
     console.error('❌ ERROR en createReservation:', error);
     
     if (error.code === 11000) {
-      return res.status(400).json({ 
-        message: 'Este horario ya está reservado' 
-      });
+      return res.status(400).json({ message: 'Este horario ya está reservado' });
     }
     
-    res.status(500).json({ 
-      message: 'Error al crear la reserva',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    res.status(500).json({ message: 'Error al crear la reserva' });
   }
 };
 
@@ -207,9 +119,7 @@ export const getWeekAvailability = async (req, res) => {
     console.log('📊 GET AVAILABILITY:', { fecha });
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      return res.status(400).json({ 
-        message: 'Formato de fecha inválido' 
-      });
+      return res.status(400).json({ message: 'Formato de fecha inválido' });
     }
 
     const [year, month, day] = fecha.split('-').map(Number);
@@ -221,13 +131,8 @@ export const getWeekAvailability = async (req, res) => {
     fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + 6);
     const fechaFin = `${fechaFinDate.getUTCFullYear()}-${String(fechaFinDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaFinDate.getUTCDate()).padStart(2, '0')}`;
 
-    console.log('📅 Rango:', { fechaInicio, fechaFin });
-
     const reservas = await Reservation.find({
-      fecha: { 
-        $gte: fechaInicio, 
-        $lte: fechaFin 
-      },
+      fecha: { $gte: fechaInicio, $lte: fechaFin },
       estado: { $ne: 'cancelada' }
     });
 
@@ -235,11 +140,8 @@ export const getWeekAvailability = async (req, res) => {
     
     res.json(reservas);
   } catch (error) {
-    console.error('❌ ERROR en getWeekAvailability:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener disponibilidad',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('❌ ERROR:', error);
+    res.status(500).json({ message: 'Error al obtener disponibilidad' });
   }
 };
 
@@ -249,12 +151,7 @@ export const getUserReservations = async (req, res) => {
     
     const reservations = await Reservation.find({ 
       usuario: req.user._id 
-    }).sort({ 
-      fecha: -1,
-      horaInicio: -1 
-    });
-    
-    console.log(`📋 Encontradas ${reservations.length} reservas`);
+    }).sort({ fecha: -1, horaInicio: -1 });
     
     const reservasFormateadas = reservations.map(reserva => ({
       _id: reserva._id,
@@ -265,7 +162,7 @@ export const getUserReservations = async (req, res) => {
       duracion: reserva.duracion,
       estado: reserva.estado,
       nombreCliente: reserva.nombreCliente,
-      servicioNombre: serviceDurations[reserva.servicio]?.nombre || reserva.servicio,
+      servicioNombre: serviceDurations[reserva.servicio]?.nombre,
       fechaLegible: (() => {
         const [year, month, day] = reserva.fecha.split('-').map(Number);
         const date = new Date(year, month - 1, day);
@@ -280,11 +177,8 @@ export const getUserReservations = async (req, res) => {
     
     res.json(reservasFormateadas);
   } catch (error) {
-    console.error('❌ ERROR en getUserReservations:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener reservas',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('❌ ERROR:', error);
+    res.status(500).json({ message: 'Error al obtener reservas' });
   }
 };
 
@@ -305,30 +199,11 @@ export const cancelReservation = async (req, res) => {
     reservation.estado = 'cancelada';
     await reservation.save();
 
-    // Eliminar de Google Calendar si existe
-    if (reservation.googleCalendarEventId) {
-      try {
-        await calendar.events.delete({
-          calendarId: 'carovillegass13@gmail.com',
-          eventId: reservation.googleCalendarEventId,
-        });
-        console.log('✅ Evento eliminado de Google Calendar');
-      } catch (error) {
-        console.error('❌ Error eliminando evento de Calendar:', error.message);
-      }
-    }
-
-    console.log('✅ Reserva cancelada:', reservation._id);
+    console.log('✅ Reserva cancelada');
     
-    res.json({
-      ...reservation.toObject(),
-      mensaje: 'Reserva cancelada exitosamente'
-    });
+    res.json({ message: 'Reserva cancelada', reservation });
   } catch (error) {
-    console.error('❌ ERROR en cancelReservation:', error);
-    res.status(500).json({ 
-      message: 'Error al cancelar reserva',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('❌ ERROR:', error);
+    res.status(500).json({ message: 'Error al cancelar reserva' });
   }
 };

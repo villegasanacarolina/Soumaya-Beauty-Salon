@@ -265,6 +265,10 @@ const Reservaciones = () => {
   };
 
   // ── Agendar cita ──────────────────────────────────────────────────────────
+  // ── Agendar cita ──────────────────────────────────────────────────────────
+  const [whatsappStep, setWhatsappStep] = useState(null);
+  // whatsappStep puede ser: null | 'join' | 'confirm'
+
   const agendarCita = async (fecha, hora) => {
     if (!selectedService) {
       showToast('Por favor selecciona un servicio primero', 'error');
@@ -295,14 +299,21 @@ const Reservaciones = () => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || `Error ${response.status}`);
 
-      showToast('¡Cita agendada! Abriendo WhatsApp para tu confirmación...', 'success');
+      // Paso 1: Abrir WhatsApp con "join valley-rhyme"
+      const joinLink = `https://wa.me/14155238886?text=${encodeURIComponent('join valley-rhyme')}`;
+      window.open(joinLink, '_blank');
 
-      // 🤖 Abrir WhatsApp automáticamente con mensaje prellenado
+      // Mostrar toast paso 1
+      setWhatsappStep('join');
+      showToast('¡Cita agendada! En WhatsApp envía ese mensaje para conectarte. Luego te enviaremos tu confirmación.', 'success');
+
+      // Paso 2: Después de 8 segundos abrir el mensaje de confirmación
       setTimeout(() => {
-        if (data.whatsappLink) {
-          window.open(data.whatsappLink, '_blank');
-        }
-      }, 1500);
+        const confirmLink = `https://wa.me/14155238886?text=${encodeURIComponent('Dame mi confirmación de cita')}`;
+        window.open(confirmLink, '_blank');
+        setWhatsappStep('confirm');
+        showToast('Ahora envía este segundo mensaje para recibir tu confirmación 💜', 'success');
+      }, 8000);
 
       await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
 
@@ -313,6 +324,7 @@ const Reservaciones = () => {
       setLoading(false);
     }
   };
+
 
   // ── Cancelar reserva (desde "Mis Citas") ─────────────────────────────────
   // Abre el modal de cancelación

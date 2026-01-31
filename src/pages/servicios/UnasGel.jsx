@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Clock, DollarSign, Calendar } from 'lucide-react';
-import Carousel from '../../components/Carousel';
+import Carousel from '../../components/ui/Carousel';
 
 const UnasGel = () => {
   const images = [

@@ -265,65 +265,36 @@ const Reservaciones = () => {
   };
 
   // ── Agendar cita ──────────────────────────────────────────────────────────
-  // ── Agendar cita ──────────────────────────────────────────────────────────
-  const [whatsappStep, setWhatsappStep] = useState(null);
-  // whatsappStep puede ser: null | 'join' | 'confirm'
-
-  const agendarCita = async (fecha, hora) => {
-    if (!selectedService) {
-      showToast('Por favor selecciona un servicio primero', 'error');
-      return;
-    }
-    if (estaOcupado(fecha, hora)) {
-      showToast('Este horario ya está ocupado', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const fechaParaBackend = formatDateToYMD(fecha);
-
-      const response = await fetch(`${API_URL}/api/reservations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          servicio: selectedService,
-          fecha: fechaParaBackend,
-          horaInicio: hora,
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || `Error ${response.status}`);
-
-      // Paso 1: Abrir WhatsApp con "join valley-rhyme"
-      const joinLink = `https://wa.me/14155238886?text=${encodeURIComponent('join valley-rhyme')}`;
-      window.open(joinLink, '_blank');
-
-      // Mostrar toast paso 1
-      setWhatsappStep('join');
-      showToast('¡Cita agendada! En WhatsApp envía ese mensaje para conectarte. Luego te enviaremos tu confirmación.', 'success');
-
-      // Paso 2: Después de 8 segundos abrir el mensaje de confirmación
-      setTimeout(() => {
-        const confirmLink = `https://wa.me/14155238886?text=${encodeURIComponent('Dame mi confirmación de cita')}`;
-        window.open(confirmLink, '_blank');
-        setWhatsappStep('confirm');
-        showToast('Ahora envía este segundo mensaje para recibir tu confirmación 💜', 'success');
-      }, 8000);
-
-      await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
-
-    } catch (err) {
-      console.error('❌ Error agendando:', err);
-      showToast(err.message || 'Error al agendar la cita', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+const agendarCita = async (fecha, hora) => {
+  if (!selectedService) {
+    showToast('Por favor selecciona un servicio primero', 'error');
+    return;
+  }
+  if (estaOcupado(fecha, hora)) {
+    showToast('Este horario ya está ocupado', 'error');
+    return;
+  }
+  setLoading(true);
+  try {
+    const fechaParaBackend = formatDateToYMD(fecha);
+    const response = await fetch(`${API_URL}/api/reservations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ servicio: selectedService, fecha: fechaParaBackend, horaInicio: hora }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || `Error ${response.status}`);
+    showToast('¡Cita agendada! Te enviamos la confirmación por SMS 💜', 'success');
+    await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
+  } catch (err) {
+    showToast(err.message || 'Error al agendar la cita', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
 
 
   // ── Cancelar reserva (desde "Mis Citas") ─────────────────────────────────

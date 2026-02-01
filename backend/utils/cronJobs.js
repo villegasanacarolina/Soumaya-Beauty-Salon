@@ -1,5 +1,5 @@
 import Reservation from '../models/Reservation.js';
-import { enviarRecordatorio } from './twilioWebhook.js';
+import { enviarRecordatorio } from './smsService.js';
 
 export const enviarRecordatoriosDiarios = async () => {
   try {

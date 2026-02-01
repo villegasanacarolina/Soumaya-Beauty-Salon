@@ -1,71 +1,60 @@
 import mongoose from 'mongoose';
 
-const reservationSchema = new mongoose.Schema({
-  usuario: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  nombreCliente: {
-    type: String,
-    required: true
-  },
-  telefonoCliente: {
-    type: String,
-    required: true
-  },
-  servicio: {
-    type: String,
-    required: true,
-    enum: ['unas-gel', 'unas-acrilicas', 'pedicure', 'keratina', 'tinte', 'pestanas', 'cejas']
-  },
-  fecha: {
-    type: String,
-    required: true,
-    validate: {
-      validator: function(v) {
-        return /^\d{4}-\d{2}-\d{2}$/.test(v);
-      },
-      message: 'Formato de fecha inválido. Use YYYY-MM-DD'
+const reservationSchema = new mongoose.Schema(
+  {
+    usuario: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    nombreCliente: {
+      type: String,
+      required: true
+    },
+    telefonoCliente: {
+      type: String,
+      required: true
+    },
+    servicio: {
+      type: String,
+      required: true
+    },
+    fecha: {
+      type: String,
+      required: true
+    },
+    horaInicio: {
+      type: String,
+      required: true
+    },
+    horaFin: {
+      type: String,
+      required: true
+    },
+    duracion: {
+      type: Number,
+      required: true
+    },
+    estado: {
+      type: String,
+      enum: ['confirmada', 'cancelada'],
+      default: 'confirmada'
+    },
+    recordatorioEnviado: {
+      type: Boolean,
+      default: false
+    },
+    // Token único para verificar cancelaciones desde SMS
+    cancelToken: {
+      type: String,
+      default: null
     }
   },
-  horaInicio: {
-    type: String,
-    required: true,
-    validate: {
-      validator: function(v) {
-        return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
-      },
-      message: 'Formato de hora inválido (HH:MM)'
-    }
-  },
-  horaFin: {
-    type: String,
-    required: true
-  },
-  duracion: {
-    type: Number,
-    required: true
-  },
-  estado: {
-    type: String,
-    enum: ['pendiente', 'confirmada', 'cancelada', 'completada'],
-    default: 'pendiente'
-  },
-  recordatorioEnviado: {
-    type: Boolean,
-    default: false
-  },
-  googleCalendarEventId: {
-    type: String,
-    default: null
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  {
+    timestamps: true
   }
-});
+);
 
-reservationSchema.index({ fecha: 1, horaInicio: 1 }, { unique: true });
+const Reservation = mongoose.model('Reservation', reservationSchema);
 
-export default mongoose.model('Reservation', reservationSchema);
+export default Reservation;

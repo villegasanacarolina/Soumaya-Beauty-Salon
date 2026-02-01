@@ -4,7 +4,7 @@ import cors from 'cors';
 import connectDB from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import reservationRoutes from './routes/reservationRoutes.js';
-import webhookRoutes from './routes/webhookRoutes.js';
+import cancelRoutes from './routes/cancelRoutes.js';
 import cron from 'node-cron';
 import { enviarRecordatoriosDiarios } from './utils/cronJobs.js';
 
@@ -24,7 +24,7 @@ connectDB();
 // ─── Rutas ──────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/reservations', reservationRoutes);
-app.use('/webhook', webhookRoutes);  // Twilio WhatsApp webhook
+app.use('/api/cancel', cancelRoutes);        // link de cancelación desde SMS
 
 // ─── Ruta de prueba ─────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -32,7 +32,7 @@ app.get('/', (req, res) => {
     message: 'Soumaya Beauty Bar API',
     status: 'running',
     mongodb: 'connected',
-    whatsapp: 'Twilio Webhook',
+    sms: 'Twilio SMS',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
@@ -62,8 +62,8 @@ app.listen(PORT, () => {
   console.log(`📍 Puerto: ${PORT}`);
   console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
   console.log(`💾 MongoDB: Conectado`);
-  console.log(`📱 WhatsApp: Twilio Webhook`);
-  console.log(`🌐 Webhook: /webhook/whatsapp`);
+  console.log(`📱 SMS: Twilio`);
+  console.log(`🔗 Cancel link: /api/cancel/:id`);
   console.log('==========================================');
   console.log('');
 });

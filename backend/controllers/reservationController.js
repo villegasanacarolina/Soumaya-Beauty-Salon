@@ -1,5 +1,6 @@
+import crypto from 'crypto';
 import Reservation from '../models/Reservation.js';
-import { notificarSalon, serviceDurations } from '../utils/twilioWebhook.js';
+import { enviarConfirmacionSMS, notificarSalon, serviceDurations } from '../utils/smsService.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,9 @@ export const createReservation = async (req, res) => {
       return res.status(400).json({ message: 'El horario ya está ocupado' });
     }
 
+    // Generar token único para el link de cancelación del SMS
+    const cancelToken = crypto.randomBytes(32).toString('hex');
+
     const reservation = await Reservation.create({
       usuario:         req.user._id,
       nombreCliente:   req.user.nombreCompleto,
@@ -74,25 +78,29 @@ export const createReservation = async (req, res) => {
       horaInicio,
       horaFin,
       duracion,
-      estado: 'confirmada'
+      estado: 'confirmada',
+      cancelToken
     });
 
     console.log('✅ RESERVA CREADA:', reservation._id);
 
-    // Notificar al salón por WhatsApp
+    // Notificar al salón por SMS
     try {
       await notificarSalon(reservation);
     } catch (e) {
       console.error('⚠️ Error notificando salón:', e.message);
     }
 
+    // Enviar SMS de confirmación al cliente con link de cancelar
+    try {
+      await enviarConfirmacionSMS(reservation);
+    } catch (e) {
+      console.error('⚠️ Error enviando SMS de confirmación:', e.message);
+    }
+
     console.log('========== FIN CREAR RESERVA ==========');
 
-    // Devolver datos + enlace de WhatsApp con mensaje prellenado
-    res.status(201).json({
-      ...reservation.toObject(),
-      whatsappLink: `https://wa.me/14155238886?text=${encodeURIComponent('Dame mi confirmación de cita')}`
-    });
+    res.status(201).json(reservation.toObject());
 
   } catch (error) {
     console.error('❌ ERROR:', error);
@@ -156,7 +164,7 @@ export const getUserReservations = async (req, res) => {
         horaFin:        reserva.horaFin,
         duracion:       reserva.duracion,
         estado:         reserva.estado,
-        nombreCliente: reserva.nombreCliente,
+        nombreCliente:  reserva.nombreCliente,
         servicioNombre: serviceDurations[reserva.servicio]?.nombre,
         fechaLegible:   date.toLocaleDateString('es-MX', {
           weekday: 'long',
@@ -175,7 +183,7 @@ export const getUserReservations = async (req, res) => {
   }
 };
 
-// ─── Cancelar reserva ───────────────────────────────────────────────────────
+// ─── Cancelar reserva (desde la página) ────────────────────────────────────
 
 export const cancelReservation = async (req, res) => {
   try {
@@ -193,6 +201,7 @@ export const cancelReservation = async (req, res) => {
     }
 
     reservation.estado = 'cancelada';
+    reservation.cancelToken = null;
     await reservation.save();
 
     console.log('✅ Reserva cancelada:', reservation._id);

@@ -6,7 +6,6 @@ const client = twilio(
 );
 
 const SALON_PHONE   = process.env.SALON_PHONE_NUMBER || '+523511270276';
-const BACKEND_URL   = process.env.BACKEND_URL || 'https://soumaya-beauty-salon.onrender.com';
 const FRONTEND_URL  = process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app';
 
 export const serviceDurations = {
@@ -19,7 +18,7 @@ export const serviceDurations = {
   'cejas':          { duracion: 30,  nombre: 'Diseño de Cejas',          precio: 350  }
 };
 
-// ─── Helper: formatear fecha ────────────────────────────────────────────────
+// ─── Helper: formatear fecha ──────────────────────────────────────────────
 const formatearFecha = (fecha) => {
   const [year, month, day] = fecha.split('-').map(Number);
   const fechaObj = new Date(year, month - 1, day);
@@ -31,20 +30,21 @@ const formatearFecha = (fecha) => {
   });
 };
 
-// ─── Helper: formatear teléfono con código de país ─────────────────────────
+// ─── Helper: formatear teléfono con código de país ────────────────────────
 const formatearTelefono = (telefono) => {
   let num = telefono.replace(/\D/g, '');
   if (num.length === 10) num = '52' + num;
   return `+${num}`;
 };
 
-// ─── SMS: Confirmación de cita con link de cancelar ─────────────────────────
+// ─── SMS: Confirmación automática + encuesta de cancelación ───────────────
+// Se envía automáticamente al crear la reserva.
+// Al final incluye la pregunta: ¿Desea cancelar su cita? Responde Sí o No
 export const enviarConfirmacionSMS = async (reserva) => {
   try {
-    const info      = serviceDurations[reserva.servicio];
-    const fecha     = formatearFecha(reserva.fecha);
-    const telefono  = formatearTelefono(reserva.telefonoCliente);
-    const cancelURL = `${BACKEND_URL}/api/cancel/${reserva._id}?token=${reserva.cancelToken}`;
+    const info     = serviceDurations[reserva.servicio];
+    const fecha    = formatearFecha(reserva.fecha);
+    const telefono = formatearTelefono(reserva.telefonoCliente);
 
     const mensaje =
       `Hola ${reserva.nombreCliente}! 🌸\n\n` +
@@ -55,7 +55,9 @@ export const enviarConfirmacionSMS = async (reserva) => {
       `💰 $${info.precio} MXN\n\n` +
       `📍 Soumaya Beauty Bar\n\n` +
       `¡Te esperamos! 💖\n\n` +
-      `Si deseas cancelar tu cita da clic aquí:\n${cancelURL}`;
+      `─────────────────\n` +
+      `¿Desea cancelar su cita?\n` +
+      `Responde Sí o No`;
 
     await client.messages.create({
       body: mensaje,
@@ -63,7 +65,7 @@ export const enviarConfirmacionSMS = async (reserva) => {
       to: telefono
     });
 
-    console.log('✅ SMS de confirmación enviado a:', telefono);
+    console.log('✅ SMS de confirmación + encuesta enviado a:', telefono);
     return { success: true };
   } catch (error) {
     console.error('❌ Error enviando SMS de confirmación:', error.message);
@@ -71,18 +73,19 @@ export const enviarConfirmacionSMS = async (reserva) => {
   }
 };
 
-// ─── SMS: Cita cancelada + link de reagendar ────────────────────────────────
+// ─── SMS: Confirmación de cancelación + pregunta de reagendar ─────────────
+// Se envía automáticamente cuando la clienta responde "Sí" a la encuesta.
 export const enviarSMSCancelado = async (reserva) => {
   try {
-    const info     = formatearFecha(reserva.fecha);
+    const fecha    = formatearFecha(reserva.fecha);
     const telefono = formatearTelefono(reserva.telefonoCliente);
     const servicio = serviceDurations[reserva.servicio];
-    const reagendarURL = `${FRONTEND_URL}/reservaciones`;
 
     const mensaje =
-      `✅ Tu cita de ${servicio.nombre} el ${info} a las ${reserva.horaInicio} ha sido cancelada.\n\n` +
-      `¿Te gustaría reagendar una nueva cita? 🌸\n\n` +
-      `Da clic aquí para agendar:\n${reagendarURL}`;
+      `✅ Tu cita de ${servicio.nombre} el ${fecha} a las ${reserva.horaInicio} ha sido cancelada.\n\n` +
+      `─────────────────\n` +
+      `¿Desea reagendar una nueva cita? 🌸\n` +
+      `Responde Sí o No`;
 
     await client.messages.create({
       body: mensaje,
@@ -90,7 +93,7 @@ export const enviarSMSCancelado = async (reserva) => {
       to: telefono
     });
 
-    console.log('✅ SMS de cancelación enviado a:', telefono);
+    console.log('✅ SMS de cancelación + pregunta reagendar enviado a:', telefono);
     return { success: true };
   } catch (error) {
     console.error('❌ Error enviando SMS de cancelación:', error.message);
@@ -98,7 +101,34 @@ export const enviarSMSCancelado = async (reserva) => {
   }
 };
 
-// ─── SMS: Notificación al salón (nueva cita) ───────────────────────────────
+// ─── SMS: Enlace para reagendar ────────────────────────────────────────────
+// Se envía cuando la clienta responde "Sí" a la pregunta de reagendar.
+export const enviarEnlaceReagendar = async (telefono) => {
+  try {
+    const tel = formatearTelefono(telefono);
+    const reagendarURL = `${FRONTEND_URL}/reservaciones`;
+
+    const mensaje =
+      `¡Genial! 🌸\n\n` +
+      `Abre el siguiente enlace para agendar tu nueva cita:\n\n` +
+      `${reagendarURL}\n\n` +
+      `Selecciona el horario que prefieras. ¡Te esperamos! 💖`;
+
+    await client.messages.create({
+      body: mensaje,
+      from: SALON_PHONE,
+      to: tel
+    });
+
+    console.log('✅ Enlace de reagendamiento enviado a:', tel);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error enviando enlace de reagendar:', error.message);
+    return { success: false };
+  }
+};
+
+// ─── SMS: Notificación al salón (nueva cita) ──────────────────────────────
 export const notificarSalon = async (reserva) => {
   try {
     const info  = serviceDurations[reserva.servicio];
@@ -116,7 +146,7 @@ export const notificarSalon = async (reserva) => {
     await client.messages.create({
       body: mensaje,
       from: SALON_PHONE,
-      to: SALON_PHONE  // se envía al mismo número del salón
+      to: SALON_PHONE
     });
 
     console.log('✅ Notificación enviada al salón');
@@ -127,7 +157,7 @@ export const notificarSalon = async (reserva) => {
   }
 };
 
-// ─── SMS: Notificación al salón (cita cancelada) ───────────────────────────
+// ─── SMS: Notificación al salón (cita cancelada) ──────────────────────────
 export const notificarSalonCancelacion = async (reserva) => {
   try {
     const info  = serviceDurations[reserva.servicio];
@@ -140,7 +170,7 @@ export const notificarSalonCancelacion = async (reserva) => {
       `📅 Fecha: ${fecha}\n` +
       `⏰ Hora: ${reserva.horaInicio}\n` +
       `💅 Servicio: ${info.nombre}\n\n` +
-      `El cliente canceló desde el SMS.`;
+      `El cliente canceló desde SMS (encuesta).`;
 
     await client.messages.create({
       body: mensaje,
@@ -156,7 +186,7 @@ export const notificarSalonCancelacion = async (reserva) => {
   }
 };
 
-// ─── SMS: Recordatorio diario (cron) ────────────────────────────────────────
+// ─── SMS: Recordatorio diario (cron) ──────────────────────────────────────
 export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fecha, hora) => {
   try {
     const info       = serviceDurations[servicio];

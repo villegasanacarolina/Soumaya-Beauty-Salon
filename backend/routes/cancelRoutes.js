@@ -4,46 +4,27 @@ import { enviarSMSCancelado, notificarSalonCancelacion } from '../utils/smsServi
 
 const router = express.Router();
 
-// ─── GET /api/cancel/:id?token=TOKEN ────────────────────────────────────────
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app';
+
+// ─── GET /api/cancel/:id?token=TOKEN ──────────────────────────────────────
 // Este endpoint es público (sin auth). La seguridad viene del cancelToken
 // que es un string único generado con crypto al crear la reserva.
 // Solo quien tiene ese link puede cancelar.
+// NOTA: Este endpoint se mantiene como fallback. El flujo principal
+// ahora es por encuesta SMS (Sí/No). Pero si alguien guarda el link
+// antiguo o lo comparte, sigue funcionando.
 router.get('/:id', async (req, res) => {
   try {
     const { id }    = req.params;
     const { token } = req.query;
 
-    console.log('🔗 Intento de cancelación por SMS link');
+    console.log('🔗 Intento de cancelación por SMS link (fallback)');
     console.log('ID:', id);
 
     // Verificar que se mandó token
     if (!token) {
       console.error('❌ No se proporcionó token');
-      return res.status(400).send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Error</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', sans-serif; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #fdf2f8; padding: 20px; }
-            .card { background: white; border-radius: 24px; padding: 48px 32px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.08); }
-            .icon { font-size: 64px; margin-bottom: 24px; }
-            h1 { color: #e53e3e; font-size: 24px; margin-bottom: 12px; }
-            p { color: #718096; font-size: 15px; line-height: 1.6; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <div class="icon">❌</div>
-            <h1>Link inválido</h1>
-            <p>Este link no es válido. Por favor revisa el SMS que recibiste.</p>
-          </div>
-        </body>
-        </html>
-      `);
+      return res.status(400).send(paginaError('Link inválido', 'Este link no es válido. Por favor revisa el SMS que recibiste.'));
     }
 
     // Buscar reserva
@@ -66,12 +47,15 @@ router.get('/:id', async (req, res) => {
       return res.status(400).send(paginaError('Ya cancelada', 'Esta cita ya fue cancelada anteriormente.'));
     }
 
-    // ── Cancelar la reserva ─────────────────────────────────────────────────
+    // ── Cancelar la reserva ───────────────────────────────────────────────
     reserva.estado = 'cancelada';
-    reserva.cancelToken = null; // invalidar el token para que no se use de nuevo
+    reserva.cancelToken = null;
+    // Cambiar a encuesta_reagendar_pendiente para que el webhook pueda
+    // procesar si la clienta responde al SMS de "¿Reagendar?"
+    reserva.estadoEncuesta = 'encuesta_reagendar_pendiente';
     await reserva.save();
 
-    console.log('✅ Reserva cancelada desde SMS link:', reserva._id);
+    console.log('✅ Reserva cancelada desde link (fallback):', reserva._id);
 
     // Notificar al salón
     try {
@@ -80,7 +64,7 @@ router.get('/:id', async (req, res) => {
       console.error('⚠️ Error notificando salón:', e.message);
     }
 
-    // Enviar SMS de cancelación con link de reagendar
+    // Enviar SMS de cancelación con pregunta de reagendar
     try {
       await enviarSMSCancelado(reserva);
     } catch (e) {
@@ -124,7 +108,7 @@ router.get('/:id', async (req, res) => {
           </div>
           <p>Tu cita ha sido cancelada exitosamente.</p>
           <p>También te enviamos un SMS con la opción de reagendar.</p>
-          <a href="${process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app'}/reservaciones" class="btn">
+          <a href="${FRONTEND_URL}/reservaciones" class="btn">
             Agendar nueva cita 🌸
           </a>
           <p class="footer">Soumaya Beauty Bar</p>
@@ -139,7 +123,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// ─── Helper: página de error genérica ───────────────────────────────────────
+// ─── Helper: página de error genérica ─────────────────────────────────────
 const paginaError = (titulo, mensaje) => `
   <!DOCTYPE html>
   <html lang="es">

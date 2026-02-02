@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import Reservation from '../models/Reservation.js';
 import { enviarConfirmacionSMS, notificarSalon, serviceDurations } from '../utils/smsService.js';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
 const calcularHoraFin = (horaInicio, duracionMinutos) => {
   const [horas, minutos] = horaInicio.split(':').map(Number);
@@ -28,7 +28,7 @@ const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   return reservasExistentes.length === 0;
 };
 
-// ─── Crear reserva ─────────────────────────────────────────────────────────
+// ─── Crear reserva ────────────────────────────────────────────────────────
 
 export const createReservation = async (req, res) => {
   try {
@@ -66,7 +66,7 @@ export const createReservation = async (req, res) => {
       return res.status(400).json({ message: 'El horario ya está ocupado' });
     }
 
-    // Generar token único para el link de cancelación del SMS
+    // Generar token único (se mantiene como backup/fallback para link de cancelación)
     const cancelToken = crypto.randomBytes(32).toString('hex');
 
     const reservation = await Reservation.create({
@@ -79,10 +79,14 @@ export const createReservation = async (req, res) => {
       horaFin,
       duracion,
       estado: 'confirmada',
-      cancelToken
+      cancelToken,
+      // ← NUEVO: marcar que esta reserva tiene encuesta pendiente
+      // El webhook detectará esta reserva cuando la clienta responda al SMS
+      estadoEncuesta: 'encuesta_cancelacion_pendiente'
     });
 
     console.log('✅ RESERVA CREADA:', reservation._id);
+    console.log('📊 estadoEncuesta:', reservation.estadoEncuesta);
 
     // Notificar al salón por SMS
     try {
@@ -91,7 +95,7 @@ export const createReservation = async (req, res) => {
       console.error('⚠️ Error notificando salón:', e.message);
     }
 
-    // Enviar SMS de confirmación al cliente con link de cancelar
+    // Enviar SMS de confirmación automática + encuesta de cancelación al cliente
     try {
       await enviarConfirmacionSMS(reservation);
     } catch (e) {
@@ -111,7 +115,7 @@ export const createReservation = async (req, res) => {
   }
 };
 
-// ─── Disponibilidad semanal ─────────────────────────────────────────────────
+// ─── Disponibilidad semanal ───────────────────────────────────────────────
 
 export const getWeekAvailability = async (req, res) => {
   try {
@@ -144,7 +148,7 @@ export const getWeekAvailability = async (req, res) => {
   }
 };
 
-// ─── Reservas del usuario ───────────────────────────────────────────────────
+// ─── Reservas del usuario ─────────────────────────────────────────────────
 
 export const getUserReservations = async (req, res) => {
   try {
@@ -183,11 +187,11 @@ export const getUserReservations = async (req, res) => {
   }
 };
 
-// ─── Cancelar reserva (desde la página) ────────────────────────────────────
+// ─── Cancelar reserva (desde la página web) ──────────────────────────────
 
 export const cancelReservation = async (req, res) => {
   try {
-    console.log('❌ ========== CANCELAR RESERVA ==========');
+    console.log('❌ ========== CANCELAR RESERVA (desde página) ==========');
     console.log('ID:', req.params.id);
 
     const reservation = await Reservation.findById(req.params.id);
@@ -202,6 +206,7 @@ export const cancelReservation = async (req, res) => {
 
     reservation.estado = 'cancelada';
     reservation.cancelToken = null;
+    reservation.estadoEncuesta = 'completada'; // cerrar encuesta si estaba pendiente
     await reservation.save();
 
     console.log('✅ Reserva cancelada:', reservation._id);
@@ -221,7 +226,7 @@ export const cancelReservation = async (req, res) => {
   }
 };
 
-// ─── Eliminar reserva del historial ─────────────────────────────────────────
+// ─── Eliminar reserva del historial ───────────────────────────────────────
 
 export const deleteReservation = async (req, res) => {
   try {

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut, X, CheckCircle, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
 
-const API_URL = 'https://soumaya-beauty-salon.onrender.com';
+const API_URL = 'https://soumaya-beauty-salon.onrender.com/api';
 
 const serviceDurations = {
   'unas-gel':       { duracion: 60,  nombre: 'Uñas de Gel',             precio: 450  },
@@ -265,32 +265,61 @@ const Reservaciones = () => {
   };
 
   // ── Agendar cita ──────────────────────────────────────────────────────────
-const agendarCita = async (fecha, hora) => {
+const agendarCita = async (diaDate, hora) => {
   if (!selectedService) {
-    showToast('Por favor selecciona un servicio primero', 'error');
+    mostrarToast('Por favor selecciona un servicio primero', 'error');
     return;
   }
-  if (estaOcupado(fecha, hora)) {
-    showToast('Este horario ya está ocupado', 'error');
-    return;
-  }
+
   setLoading(true);
+
   try {
-    const fechaParaBackend = formatDateToYMD(fecha);
-    const response = await fetch(`${API_URL}/api/reservations`, {
+    const fechaStr = formatDateToYMD(diaDate);
+
+    const response = await fetch(`${API_URL}/reservations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ servicio: selectedService, fecha: fechaParaBackend, horaInicio: hora }),
+      body: JSON.stringify({
+        servicio: selectedService,
+        fecha: fechaStr,
+        horaInicio: hora
+      })
     });
+
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || `Error ${response.status}`);
-    showToast('¡Cita agendada! Te enviamos la confirmación por SMS 💜', 'success');
-    await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
-  } catch (err) {
-    showToast(err.message || 'Error al agendar la cita', 'error');
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Error al crear la reservación');
+    }
+
+    console.log('✅ Reserva creada:', data);
+
+    // ── NUEVO: Abrir WhatsApp automáticamente si hay deep link ──────────
+    if (data.whatsappDeepLink) {
+      console.log('📲 Abriendo WhatsApp con deep link:', data.whatsappDeepLink);
+      
+      // Pequeño delay para que el usuario vea el mensaje de éxito primero
+      setTimeout(() => {
+        window.open(data.whatsappDeepLink, '_blank');
+      }, 1000);
+      
+      mostrarToast(
+        '✅ Cita agendada! Abre WhatsApp para completar tu registro y recibir confirmación.',
+        'success'
+      );
+    } else {
+      mostrarToast('✅ Cita agendada correctamente', 'success');
+    }
+
+    await cargarDisponibilidad();
+    await cargarMisReservas();
+
+  } catch (error) {
+    console.error('❌ Error:', error);
+    mostrarToast(error.message || 'Error al agendar la cita', 'error');
   } finally {
     setLoading(false);
   }

@@ -4,7 +4,7 @@ const reservationSchema = new mongoose.Schema(
   {
     usuario: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref:   'User',
       required: true
     },
     nombreCliente: {
@@ -41,25 +41,37 @@ const reservationSchema = new mongoose.Schema(
       default: 'confirmada',
       enum: ['confirmada', 'cancelada', 'completada']
     },
-    // Token único para el link de cancelación por SMS (backup/fallback)
-    cancelToken: {
+
+    // ─── Google Calendar ────────────────────────────────────────────────
+    // ID del evento en Google Calendar para poder eliminarlo al cancelar
+    googleCalendarEventId: {
       type: String,
       default: null
     },
-    // Estado de la encuesta SMS:
-    //   'encuesta_cancelacion_pendiente' → se envió confirmación, esperando Sí/No de cancelar
-    //   'encuesta_reagendar_pendiente'   → cita cancelada, esperando Sí/No de reagendar
-    //   'completada'                     → encuesta finalizada (respondió No en cualquier paso)
-    //   null                             → no aplica (reserva antigua o sin encuesta)
+
+    // ─── WhatsApp / Encuesta ────────────────────────────────────────────
+    // Estado de la encuesta WhatsApp:
+    //   'pendiente_conexion'              → se generó el deep link, esperando que la clienta se conecte
+    //   'encuesta_cancelacion_pendiente'  → confirmación enviada, esperando Sí/No de cancelar
+    //   'encuesta_reagendar_pendiente'    → cita cancelada, esperando Sí/No de reagendar
+    //   'completada'                      → encuesta finalizada
+    //   null                              → no aplica (reservas antiguas)
     estadoEncuesta: {
       type: String,
       default: null,
       enum: [
+        'pendiente_conexion',
         'encuesta_cancelacion_pendiente',
         'encuesta_reagendar_pendiente',
         'completada',
         null
       ]
+    },
+
+    // Token de respaldo para cancelación por link (mantiene compatibilidad)
+    cancelToken: {
+      type: String,
+      default: null
     }
   },
   {

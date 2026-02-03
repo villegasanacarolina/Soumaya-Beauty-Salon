@@ -1,5 +1,5 @@
 import Reservation from '../models/Reservation.js';
-import { enviarRecordatorio } from './smsService.js';
+import { enviarRecordatorio } from './whatsappService.js';
 
 export const enviarRecordatoriosDiarios = async () => {
   try {

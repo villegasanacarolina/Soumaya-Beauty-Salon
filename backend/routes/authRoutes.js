@@ -1,6 +1,6 @@
 import express from 'express';
 import { register, login, getProfile } from '../controllers/authController.js';
-import { protect } from '../middleware/auth.js';
+import { protect } from '../middleware/authMiddleware.js';  // ← CAMBIADO: Usar authMiddleware
 
 const router = express.Router();
 

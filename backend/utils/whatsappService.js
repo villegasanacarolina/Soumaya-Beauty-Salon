@@ -59,7 +59,12 @@ export const generarWhatsappDeepLink = () => {
 // Se envía DESPUÉS de que la clienta se conecte al sandbox (webhook confirma esto)
 export const enviarConfirmacionWhatsApp = async (reserva) => {
   try {
-    const info     = serviceDurations[reserva.servicio];
+    const info = serviceDurations[reserva.servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${reserva.servicio}`);
+    }
+    
     const fecha    = formatearFecha(reserva.fecha);
     const destino  = formatearWhatsapp(reserva.telefonoCliente);
 
@@ -93,9 +98,14 @@ export const enviarConfirmacionWhatsApp = async (reserva) => {
 // ─── WhatsApp: Confirmación de cancelación + pregunta de reagendar ─────────
 export const enviarWhatsAppCancelado = async (reserva) => {
   try {
+    const info = serviceDurations[reserva.servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${reserva.servicio}`);
+    }
+    
     const fecha   = formatearFecha(reserva.fecha);
     const destino = formatearWhatsapp(reserva.telefonoCliente);
-    const info    = serviceDurations[reserva.servicio];
 
     const mensaje =
       `✅ Tu cita de ${info.nombre} el ${fecha} a las ${reserva.horaInicio} ha sido cancelada.\n\n` +
@@ -147,7 +157,12 @@ export const enviarEnlaceReagendar = async (telefono) => {
 // ─── WhatsApp: Notificación al salón (nueva cita) ─────────────────────────
 export const notificarSalon = async (reserva) => {
   try {
-    const info  = serviceDurations[reserva.servicio];
+    const info = serviceDurations[reserva.servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${reserva.servicio}`);
+    }
+    
     const fecha = formatearFecha(reserva.fecha);
     const salonWhatsapp = formatearWhatsapp(
       process.env.SALON_PHONE_NUMBER || '3511270276'
@@ -180,7 +195,12 @@ export const notificarSalon = async (reserva) => {
 // ─── WhatsApp: Notificación al salón (cita cancelada) ─────────────────────
 export const notificarSalonCancelacion = async (reserva) => {
   try {
-    const info  = serviceDurations[reserva.servicio];
+    const info = serviceDurations[reserva.servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${reserva.servicio}`);
+    }
+    
     const fecha = formatearFecha(reserva.fecha);
     const salonWhatsapp = formatearWhatsapp(
       process.env.SALON_PHONE_NUMBER || '3511270276'
@@ -213,7 +233,12 @@ export const notificarSalonCancelacion = async (reserva) => {
 // ─── WhatsApp: Recordatorio diario (cron) ─────────────────────────────────
 export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fecha, hora) => {
   try {
-    const info       = serviceDurations[servicio];
+    const info = serviceDurations[servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${servicio}`);
+    }
+    
     const fechaTexto = formatearFecha(fecha);
     const destino    = formatearWhatsapp(telefono);
 

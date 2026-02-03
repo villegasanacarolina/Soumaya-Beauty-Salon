@@ -36,6 +36,10 @@ const reservationSchema = new mongoose.Schema(
       type: Number,
       required: true  // en minutos
     },
+    precio: {
+      type: Number,
+      required: true  // ← NUEVO: Precio del servicio en MXN
+    },
     estado: {
       type: String,
       default: 'confirmada',
@@ -72,6 +76,12 @@ const reservationSchema = new mongoose.Schema(
     cancelToken: {
       type: String,
       default: null
+    },
+    
+    // Campo para marcar si ya se envió recordatorio
+    recordatorioEnviado: {
+      type: Boolean,
+      default: false
     }
   },
   {

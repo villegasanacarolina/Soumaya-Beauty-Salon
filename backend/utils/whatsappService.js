@@ -49,7 +49,7 @@ const formatearWhatsapp = (telefono) => {
 // Formato: https://api.whatsapp.com/send?phone=<sandbox_number>&text=<join_keyword>
 export const generarWhatsappDeepLink = () => {
   const sandboxNumber = process.env.WHATSAPP_SANDBOX_NUMBER || '14155238886';
-  const sandboxKeyword = process.env.WHATSAPP_SANDBOX_KEYWORD || 'join tunpalabra';
+  const sandboxKeyword = process.env.WHATSAPP_SANDBOX_KEYWORD || 'join valley-rhyme';
 
   const encodedText = encodeURIComponent(sandboxKeyword);
   return `https://api.whatsapp.com/send?phone=${sandboxNumber}&text=${encodedText}`;

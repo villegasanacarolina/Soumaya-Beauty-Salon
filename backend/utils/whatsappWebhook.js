@@ -27,14 +27,37 @@ const ultimosDiezeDigitos = (numero) => {
 const buscarReservaPendienteConexion = async (numero) => {
   const ultimos10 = ultimosDiezeDigitos(numero);
 
+  console.log('🔍 Buscando reserva pendiente_conexion...');
+  console.log('   Número completo:', numero);
+  console.log('   Últimos 10 dígitos:', ultimos10);
+
   const reservas = await Reservation.find({
     estadoEncuesta: 'pendiente_conexion'
   }).sort({ createdAt: -1 });
 
-  return reservas.find(r => {
+  console.log('📋 Reservas con pendiente_conexion encontradas:', reservas.length);
+  
+  reservas.forEach((r, index) => {
+    const telReserva = ultimosDiezeDigitos(r.telefonoCliente || '');
+    console.log(`   ${index + 1}. ID: ${r._id}`);
+    console.log(`      Nombre: ${r.nombreCliente}`);
+    console.log(`      Tel original: ${r.telefonoCliente}`);
+    console.log(`      Tel últimos 10: ${telReserva}`);
+    console.log(`      Coincide?: ${telReserva === ultimos10 ? '✅ SÍ' : '❌ NO'}`);
+  });
+
+  const reservaEncontrada = reservas.find(r => {
     const telReserva = ultimosDiezeDigitos(r.telefonoCliente || '');
     return telReserva === ultimos10;
   }) || null;
+
+  if (reservaEncontrada) {
+    console.log('✅ RESERVA ENCONTRADA:', reservaEncontrada._id);
+  } else {
+    console.log('❌ NO SE ENCONTRÓ RESERVA COINCIDENTE');
+  }
+
+  return reservaEncontrada;
 };
 
 // ─── Helper: buscar reserva pendiente de encuesta de cancelación ────────────
@@ -69,7 +92,9 @@ const buscarReservaPendienteReagendar = async (numero) => {
 
 // ─── Helper: detectar si el mensaje es "join <algo>" ───────────────────────
 const esMensajeJoin = (texto) => {
-  return texto.toLowerCase().trim().startsWith('join ');
+  const esJoin = texto.toLowerCase().trim().startsWith('join ');
+  console.log(`🔍 ¿Es mensaje JOIN? "${texto}" → ${esJoin ? 'SÍ ✅' : 'NO ❌'}`);
+  return esJoin;
 };
 
 // ─── Helper: detectar respuesta afirmativa ─────────────────────────────────
@@ -85,38 +110,22 @@ const esRespuestaNo = (texto) => {
 };
 
 // ─── Handler principal: recibe WhatsApp de Twilio ──────────────────────────
-// Twilio llama a este endpoint cuando la clienta envía un mensaje.
-// URL en Twilio Sandbox: https://soumaya-beauty-salon.onrender.com/api/whatsapp/webhook
-//
-// FLUJO:
-// A) Cliente envía "join <keyword>" → Twilio llama aquí
-//    → Detectamos que es un "join" → buscamos reserva con pendiente_conexion
-//    → Enviamos el WhatsApp de confirmación + encuesta
-//
-// B) Cliente responde "Sí" a cancelar
-//    → Cancelar en MongoDB → Eliminar de Google Calendar → Preguntar reagendar
-//
-// C) Cliente responde "No" a cancelar
-//    → Confirmar que la cita sigue activa
-//
-// D) Cliente responde "Sí" a reagendar
-//    → Enviar link a /reservaciones
-//
-// E) Cliente responde "No" a reagendar
-//    → Mensaje de despedida
-
 export const handleIncomingWhatsApp = async (req, res) => {
+  console.log('');
   console.log('📨 ========== WHATSAPP RECIBIDO ==========');
+  console.log('Timestamp:', new Date().toISOString());
 
-  const from = req.body.From || '';        // whatsapp:+5231234567890
+  const from = req.body.From || '';
   const body = (req.body.Body || '').trim();
 
   console.log('De:', from);
-  console.log('Mensaje:', body);
+  console.log('Mensaje:', `"${body}"`);
+  console.log('Body completo:', JSON.stringify(req.body, null, 2));
 
   // Responder inmediatamente a Twilio (requerido para evitar timeout)
   res.type('text/xml');
   res.send('<Response></Response>');
+  console.log('✅ Respuesta enviada a Twilio');
 
   // ─── Procesar de forma asíncrona ──────────────────────────────────────
   try {
@@ -125,33 +134,70 @@ export const handleIncomingWhatsApp = async (req, res) => {
     // CASO A: El mensaje es "join <keyword>" — la clienta se conectó
     // ══════════════════════════════════════════════════════════════════════
     if (esMensajeJoin(body)) {
-      console.log('🔗 Mensaje de JOIN detectado');
+      console.log('🔗 ✅ ES UN MENSAJE DE JOIN');
 
       const reservaPendiente = await buscarReservaPendienteConexion(from);
 
       if (reservaPendiente) {
-        console.log('🔍 Reserva encontrada con pendiente_conexion:', reservaPendiente._id);
+        console.log('');
+        console.log('🎯 RESERVA ENCONTRADA:');
+        console.log('   ID:', reservaPendiente._id);
+        console.log('   Nombre:', reservaPendiente.nombreCliente);
+        console.log('   Teléfono:', reservaPendiente.telefonoCliente);
+        console.log('   Servicio:', reservaPendiente.servicio);
+        console.log('   Fecha:', reservaPendiente.fecha);
+        console.log('   Estado actual:', reservaPendiente.estadoEncuesta);
 
         // Cambiar estado a "esperando respuesta de encuesta"
+        console.log('🔄 Cambiando estado a encuesta_cancelacion_pendiente...');
         reservaPendiente.estadoEncuesta = 'encuesta_cancelacion_pendiente';
         await reservaPendiente.save();
+        console.log('✅ Estado cambiado exitosamente');
 
         // Enviar el WhatsApp de confirmación + encuesta
-        await enviarConfirmacionWhatsApp(reservaPendiente);
-        console.log('✅ WhatsApp de confirmación enviado tras conexión');
+        console.log('📤 Enviando WhatsApp de confirmación...');
+        try {
+          const resultado = await enviarConfirmacionWhatsApp(reservaPendiente);
+          if (resultado.success) {
+            console.log('✅ ✅ ✅ WHATSAPP DE CONFIRMACIÓN ENVIADO EXITOSAMENTE');
+          } else {
+            console.error('❌ ❌ ❌ ERROR AL ENVIAR WHATSAPP:', resultado.error);
+          }
+        } catch (errorWhatsApp) {
+          console.error('❌ ❌ ❌ EXCEPCIÓN AL ENVIAR WHATSAPP:', errorWhatsApp);
+          console.error('Stack:', errorWhatsApp.stack);
+        }
       } else {
-        // No hay reserva pendiente, es un join genérico
-        console.log('⚠️ JOIN recibido pero no hay reserva pendiente de conexión');
-        // No enviar nada extra, Twilio ya envió su confirmación de join
+        // No hay reserva pendiente
+        console.log('⚠️ ⚠️ ⚠️ JOIN RECIBIDO PERO NO HAY RESERVA PENDIENTE');
+        console.log('');
+        console.log('🔍 DIAGNÓSTICO:');
+        console.log('   Posibles causas:');
+        console.log('   1. La reserva no se creó con estadoEncuesta: pendiente_conexion');
+        console.log('   2. El número de teléfono no coincide (últimos 10 dígitos)');
+        console.log('   3. La reserva ya cambió de estado anteriormente');
+        console.log('');
+        
+        // Buscar TODAS las reservas recientes para debugging
+        const todasReservas = await Reservation.find({})
+          .sort({ createdAt: -1 })
+          .limit(5);
+        
+        console.log('📋 ÚLTIMAS 5 RESERVAS EN LA BASE DE DATOS:');
+        todasReservas.forEach((r, i) => {
+          console.log(`   ${i + 1}. ${r.nombreCliente} (${r.telefonoCliente})`);
+          console.log(`      Estado: ${r.estado} | Encuesta: ${r.estadoEncuesta}`);
+          console.log(`      Fecha: ${r.fecha} | Servicio: ${r.servicio}`);
+        });
       }
 
       console.log('==========================================');
+      console.log('');
       return;
     }
 
     // ══════════════════════════════════════════════════════════════════════
     // CASO D/E: Verificar si hay reserva esperando respuesta de REAGENDAR
-    // (se verifica primero porque es un estado más específico)
     // ══════════════════════════════════════════════════════════════════════
     const reservaReagendar = await buscarReservaPendienteReagendar(from);
 
@@ -159,7 +205,6 @@ export const handleIncomingWhatsApp = async (req, res) => {
       console.log('🔍 Reserva encontrada en estado reagendar pendiente:', reservaReagendar._id);
 
       if (esRespuestaSi(body)) {
-        // La clienta quiere reagendar → enviar enlace
         reservaReagendar.estadoEncuesta = 'completada';
         await reservaReagendar.save();
 
@@ -167,11 +212,9 @@ export const handleIncomingWhatsApp = async (req, res) => {
         console.log('✅ Enlace de reagendamiento enviado');
 
       } else if (esRespuestaNo(body)) {
-        // La clienta no quiere reagendar → cerrar encuesta
         reservaReagendar.estadoEncuesta = 'completada';
         await reservaReagendar.save();
 
-        // Mensaje de despedida
         await client.messages.create({
           body:
             `De acuerdo 🌸 Si en algún momento deseas agendar una cita, no dudes en visitar:\n\n` +
@@ -184,7 +227,6 @@ export const handleIncomingWhatsApp = async (req, res) => {
         console.log('✅ Mensaje de despedida enviado');
 
       } else {
-        // Respuesta no reconocida → recordar opciones
         await client.messages.create({
           body: `No entendí tu respuesta 😊\n\n¿Desea reagendar una nueva cita?\nPor favor responde *Sí* o *No*`,
           from: WHATSAPP_FROM,
@@ -194,6 +236,7 @@ export const handleIncomingWhatsApp = async (req, res) => {
       }
 
       console.log('==========================================');
+      console.log('');
       return;
     }
 
@@ -206,17 +249,14 @@ export const handleIncomingWhatsApp = async (req, res) => {
       console.log('🔍 Reserva encontrada en estado encuesta cancelación pendiente:', reservaCancelar._id);
 
       if (esRespuestaSi(body)) {
-        // La clienta quiere CANCELAR su cita
         console.log('🔓 Cliente confirmó cancelación');
 
-        // ── Cancelar en MongoDB ───────────────────────────────────────
         reservaCancelar.estado         = 'cancelada';
         reservaCancelar.estadoEncuesta = 'encuesta_reagendar_pendiente';
         reservaCancelar.cancelToken    = null;
         await reservaCancelar.save();
         console.log('✅ Reserva cancelada en DB:', reservaCancelar._id);
 
-        // ── Eliminar de Google Calendar ───────────────────────────────
         if (reservaCancelar.googleCalendarEventId) {
           try {
             await eliminarEventoCalendar(reservaCancelar.googleCalendarEventId);
@@ -226,14 +266,12 @@ export const handleIncomingWhatsApp = async (req, res) => {
           }
         }
 
-        // ── Notificar al salón ────────────────────────────────────────
         try {
           await notificarSalonCancelacion(reservaCancelar);
         } catch (e) {
           console.error('⚠️ Error notificando salón:', e.message);
         }
 
-        // ── Enviar WhatsApp de cancelación + pregunta de reagendar ────
         try {
           await enviarWhatsAppCancelado(reservaCancelar);
         } catch (e) {
@@ -241,7 +279,6 @@ export const handleIncomingWhatsApp = async (req, res) => {
         }
 
       } else if (esRespuestaNo(body)) {
-        // La clienta NO quiere cancelar → cerrar encuesta
         reservaCancelar.estadoEncuesta = 'completada';
         await reservaCancelar.save();
 
@@ -253,7 +290,6 @@ export const handleIncomingWhatsApp = async (req, res) => {
         console.log('✅ Cliente confirmó que NO cancela');
 
       } else {
-        // Respuesta no reconocida → recordar opciones
         await client.messages.create({
           body: `No entendí tu respuesta 😊\n\n¿Desea cancelar su cita?\nPor favor responde *Sí* o *No*`,
           from: WHATSAPP_FROM,
@@ -263,6 +299,7 @@ export const handleIncomingWhatsApp = async (req, res) => {
       }
 
       console.log('==========================================');
+      console.log('');
       return;
     }
 
@@ -271,7 +308,6 @@ export const handleIncomingWhatsApp = async (req, res) => {
     // ══════════════════════════════════════════════════════════════════════
     console.log('⚠️ No se encontró reserva con encuesta pendiente para este número');
 
-    // Solo enviar respuesta si NO es un mensaje "join" (ya lo manejamos arriba)
     await client.messages.create({
       body:
         `Hola! 👋 Soy el asistente de Soumaya Beauty Bar 🌸\n\n` +
@@ -284,8 +320,10 @@ export const handleIncomingWhatsApp = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error procesando WhatsApp entrante:', error);
+    console.error('❌ ❌ ❌ ERROR PROCESANDO WHATSAPP ENTRANTE:', error);
+    console.error('Stack completo:', error.stack);
   }
 
   console.log('==========================================');
+  console.log('');
 };

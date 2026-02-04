@@ -31,7 +31,12 @@ const formatearFecha = (fecha) => {
 // Whapi usa formato: 521234567890@s.whatsapp.net
 const formatearTelefonoWhapi = (telefono) => {
   let num = telefono.replace(/\D/g, '');
-  if (num.length === 10) num = '52' + num; // Agregar código de país México
+  
+  // Si ya tiene código de país, mantenerlo
+  if (!num.startsWith('52') && num.length === 10) {
+    num = '52' + num; // Agregar código de país México
+  }
+  
   return `${num}@s.whatsapp.net`;
 };
 
@@ -54,11 +59,49 @@ const enviarMensajeWhapi = async (telefono, mensaje) => {
       }
     );
 
-    console.log('✅ Mensaje Whapi enviado:', to);
+    console.log('✅ Mensaje Whapi enviado a:', to);
     return { success: true, data: response.data };
   } catch (error) {
     console.error('❌ Error enviando mensaje Whapi:', error.response?.data || error.message);
     return { success: false, error: error.message };
+  }
+};
+
+// ─── Helper: Procesar mensaje entrante de Whapi ────────────────────────────
+export const procesarMensajeEntrante = async (mensaje) => {
+  try {
+    // Extraer teléfono del remitente
+    const from = mensaje.from;
+    // Formato: 521234567890@s.whatsapp.net → extraer solo números
+    const telefonoMatch = from.match(/\d+/g);
+    if (!telefonoMatch) return null;
+    
+    const telefonoCompleto = telefonoMatch.join('');
+    // Quitar código de país si es necesario (52 para México)
+    let telefono = telefonoCompleto;
+    if (telefonoCompleto.startsWith('52') && telefonoCompleto.length === 12) {
+      telefono = telefonoCompleto.slice(2); // Quitar el 52
+    }
+    
+    // Extraer texto del mensaje
+    const texto = mensaje.text?.body?.toLowerCase().trim() || '';
+    
+    // Determinar si es afirmativo o negativo
+    const afirmativos = ['si', 'sí', 'yes', 'confirmo', 'acepto', 'ok', 'dale', 'quiero cancelar'];
+    const negativos = ['no', 'nop', 'mantener', 'no quiero cancelar', 'seguir'];
+    
+    const esAfirmativo = afirmativos.some(palabra => texto.includes(palabra));
+    const esNegativo = negativos.some(palabra => texto.includes(palabra));
+    
+    return {
+      telefono,
+      texto,
+      esAfirmativo,
+      esNegativo
+    };
+  } catch (error) {
+    console.error('❌ Error procesando mensaje:', error);
+    return null;
   }
 };
 
@@ -85,13 +128,15 @@ export const notificarSalonNuevaCita = async (reserva) => {
       `📅 *Fecha:* ${fecha}\n` +
       `⏰ *Hora:* ${reserva.horaInicio} - ${reserva.horaFin}\n` +
       `💅 *Servicio:* ${info.nombre}\n` +
-      `💰 *Precio:* $${info.precio} MXN\n\n` +
-      `📎 Evento agregado a Google Calendar ✅`;
+      `💰 *Precio:* $${info.precio} MXN\n` +
+      `🆔 *ID Reserva:* ${reserva._id}\n\n` +
+      `📎 Evento agregado a Google Calendar ✅\n\n` +
+      `_Para cancelar, contacta al cliente directamente._`;
 
     const resultado = await enviarMensajeWhapi(salonPhone, mensaje);
     
     if (resultado.success) {
-      console.log('📨 Salón notificado por WhatsApp');
+      console.log('📨 Salón notificado por WhatsApp:', salonPhone);
     }
     
     return resultado;
@@ -111,24 +156,29 @@ export const enviarConfirmacionCita = async (reserva) => {
     }
     
     const fecha = formatearFecha(reserva.fecha);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app';
 
     const mensaje =
-      `Hola ${reserva.nombreCliente}! 🌸\n\n` +
-      `✅ *Tu cita está confirmada*\n\n` +
-      `📅 ${fecha}\n` +
-      `⏰ ${reserva.horaInicio} - ${reserva.horaFin}\n` +
-      `💅 ${info.nombre}\n` +
-      `💰 $${info.precio} MXN\n\n` +
-      `📍 Soumaya Beauty Bar\n\n` +
+      `🌸 *SOUMAYA BEAUTY BAR* 🌸\n\n` +
+      `Hola ${reserva.nombreCliente}!\n\n` +
+      `✅ *TU CITA HA SIDO CONFIRMADA*\n\n` +
+      `📅 *Fecha:* ${fecha}\n` +
+      `⏰ *Hora:* ${reserva.horaInicio} - ${reserva.horaFin}\n` +
+      `💅 *Servicio:* ${info.nombre}\n` +
+      `💰 *Precio:* $${info.precio} MXN\n\n` +
+      `📍 *Ubicación:* Soumaya Beauty Bar\n\n` +
       `¡Te esperamos! 💖\n\n` +
       `─────────────────\n` +
-      `¿Deseas cancelar tu cita?\n` +
-      `Responde *Sí* o *No*`;
+      `*¿Deseas cancelar o modificar tu cita?*\n\n` +
+      `Responde *SÍ* para cancelar\n` +
+      `Responde *NO* para mantenerla\n\n` +
+      `También puedes gestionar tu cita aquí:\n` +
+      `${frontendUrl}/reservaciones`;
 
     const resultado = await enviarMensajeWhapi(reserva.telefonoCliente, mensaje);
     
     if (resultado.success) {
-      console.log('✅ Confirmación enviada a cliente');
+      console.log('✅ Confirmación enviada a cliente:', reserva.telefonoCliente);
     }
     
     return resultado;
@@ -148,19 +198,25 @@ export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fech
     }
     
     const fechaTexto = formatearFecha(fecha);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app';
 
     const mensaje =
-      `⏰ *RECORDATORIO DE CITA*\n\n` +
+      `⏰ *RECORDATORIO DE CITA - SOUMAYA BEAUTY BAR* ⏰\n\n` +
       `Hola ${nombreCliente}! 🌸\n\n` +
-      `Mañana tienes tu cita:\n\n` +
-      `📅 ${fechaTexto}\n` +
-      `⏰ ${hora}\n` +
-      `💅 ${info.nombre}\n\n` +
-      `¡No olvides asistir! 💖\n\n` +
+      `Te recordamos que *MAÑANA* tienes tu cita:\n\n` +
+      `📅 *Fecha:* ${fechaTexto}\n` +
+      `⏰ *Hora:* ${hora}\n` +
+      `💅 *Servicio:* ${info.nombre}\n` +
+      `💰 *Precio:* $${info.precio} MXN\n\n` +
+      `📍 *Ubicación:* Soumaya Beauty Bar\n\n` +
+      `*¡No olvides asistir!* 💖\n\n` +
       `─────────────────\n` +
-      `¿Deseas cancelar tu cita?\n` +
-      `Responde *Sí* o *No*\n\n` +
-      `Soumaya Beauty Bar`;
+      `*¿Necesitas cancelar o modificar?*\n\n` +
+      `Responde *SÍ* para cancelar\n` +
+      `Responde *NO* para mantenerla\n\n` +
+      `También puedes gestionar tu cita aquí:\n` +
+      `${frontendUrl}/reservaciones\n\n` +
+      `_Este es un mensaje automático_`;
 
     const resultado = await enviarMensajeWhapi(telefono, mensaje);
     
@@ -175,7 +231,7 @@ export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fech
   }
 };
 
-// ─── WhatsApp: Confirmación de cancelación (ESTA FALTABA) ─────────────────
+// ─── WhatsApp: Confirmación de cancelación ─────────────────
 export const enviarMensajeCancelacionConfirmada = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
@@ -188,17 +244,22 @@ export const enviarMensajeCancelacionConfirmada = async (reserva) => {
     const frontendUrl = process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app';
 
     const mensaje =
-      `✅ *Tu cita ha sido cancelada*\n\n` +
-      `${info.nombre} el ${fecha} a las ${reserva.horaInicio}\n\n` +
-      `El evento fue eliminado de tu calendario.\n\n` +
-      `¿Deseas reagendar?\n` +
-      `Visita: ${frontendUrl}/reservaciones\n\n` +
-      `Soumaya Beauty Bar 🌸`;
+      `✅ *CITA CANCELADA - SOUMAYA BEAUTY BAR* ✅\n\n` +
+      `Hola ${reserva.nombreCliente},\n\n` +
+      `Tu cita ha sido cancelada exitosamente:\n\n` +
+      `💅 *Servicio:* ${info.nombre}\n` +
+      `📅 *Fecha:* ${fecha}\n` +
+      `⏰ *Hora:* ${reserva.horaInicio}\n\n` +
+      `*El evento ha sido eliminado de nuestro calendario.*\n\n` +
+      `¿Deseas reagendar? Puedes hacerlo fácilmente:\n` +
+      `${frontendUrl}/reservaciones\n\n` +
+      `¡Esperamos verte pronto! 🌸\n\n` +
+      `_Este es un mensaje automático_`;
 
     const resultado = await enviarMensajeWhapi(reserva.telefonoCliente, mensaje);
     
     if (resultado.success) {
-      console.log('✅ Confirmación de cancelación enviada');
+      console.log('✅ Confirmación de cancelación enviada:', reserva.telefonoCliente);
     }
     
     return resultado;
@@ -226,14 +287,16 @@ export const notificarSalonCancelacion = async (reserva) => {
       `📱 *Teléfono:* ${reserva.telefonoCliente}\n` +
       `📅 *Fecha:* ${fecha}\n` +
       `⏰ *Hora:* ${reserva.horaInicio}\n` +
-      `💅 *Servicio:* ${info.nombre}\n\n` +
-      `El cliente canceló desde WhatsApp.\n` +
-      `📎 Evento eliminado de Google Calendar ✅`;
+      `💅 *Servicio:* ${info.nombre}\n` +
+      `🆔 *ID Reserva:* ${reserva._id}\n\n` +
+      `*Motivo:* Cancelación solicitada por WhatsApp\n\n` +
+      `📎 Evento eliminado de Google Calendar ✅\n\n` +
+      `_El cliente fue notificado automáticamente._`;
 
     const resultado = await enviarMensajeWhapi(salonPhone, mensaje);
     
     if (resultado.success) {
-      console.log('✅ Salón notificado de cancelación');
+      console.log('✅ Salón notificado de cancelación:', salonPhone);
     }
     
     return resultado;

@@ -4,16 +4,32 @@ import {
   getWeekAvailability, 
   getUserReservations, 
   cancelReservation,
-  deleteReservation 
+  deleteReservation,
+  syncWithGoogleCalendar
 } from '../controllers/reservationController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/', protect, createReservation);
-router.get('/availability/:fecha', protect, getWeekAvailability);
-router.get('/my-reservations', protect, getUserReservations);
-router.put('/:id/cancel', protect, cancelReservation);
-router.delete('/:id', protect, deleteReservation);
+// Todas las rutas requieren autenticación
+router.use(protect);
+
+// Crear nueva reserva
+router.post('/', createReservation);
+
+// Obtener disponibilidad semanal
+router.get('/availability/:fecha', getWeekAvailability);
+
+// Obtener reservas del usuario
+router.get('/my-reservations', getUserReservations);
+
+// Cancelar reserva
+router.put('/:id/cancel', cancelReservation);
+
+// Eliminar reserva del historial
+router.delete('/:id', deleteReservation);
+
+// Sincronizar con Google Calendar (para administración)
+router.post('/sync-calendar', syncWithGoogleCalendar);
 
 export default router;

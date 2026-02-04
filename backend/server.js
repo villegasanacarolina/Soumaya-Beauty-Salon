@@ -5,70 +5,80 @@ import connectDB from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import reservationRoutes from './routes/reservationRoutes.js';
 import whapiRoutes from './routes/whapiRoutes.js';
+
+// Importar cron jobs
+import { enviarRecordatoriosDiarios } from './jobs/cronJobs.js';
 import cron from 'node-cron';
-import { enviarRecordatoriosDiarios } from './utils/cronJobs.js';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-// ─── Middleware ──────────────────────────────────────────────────────────────
-app.use(cors());
+// Middleware
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'https://soumaya-beauty-salon.vercel.app',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Conectar Base de Datos ─────────────────────────────────────────────────
+// Conectar a MongoDB
 connectDB();
 
-// ─── Rutas ──────────────────────────────────────────────────────────────────
+// Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/whapi', whapiRoutes);
 
-// ─── Ruta de prueba ─────────────────────────────────────────────────────────
+// Ruta de prueba
 app.get('/', (req, res) => {
-  res.json({
+  res.json({ 
     message: 'Soumaya Beauty Bar API',
-    status: 'running',
-    mongodb: 'connected',
-    whatsapp: 'Whapi.cloud',
-    calendar: 'Google Calendar API',
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
+    version: '1.0.0',
+    status: 'online',
+    endpoints: {
+      auth: '/api/auth',
+      reservations: '/api/reservations',
+      whapi: '/api/whapi'
+    }
   });
 });
 
-// ─── Cron Job – Recordatorios diarios a las 6:30 PM ───────────────────────────
-// Formato: minutos horas * * *
-// 30 18 = 6:30 PM (18:30)
-cron.schedule('30 18 * * *', () => {
-  console.log('⏰ Ejecutando envío de recordatorios (6:30 PM)...');
-  enviarRecordatoriosDiarios();
+// Ruta de salud
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    service: 'Soumaya Beauty Salon API'
+  });
+});
+
+// Configurar cron job para recordatorios diarios a las 6:30 PM
+// '30 18 * * *' = Cada día a las 18:30 (6:30 PM) hora de México
+cron.schedule('30 18 * * *', async () => {
+  console.log('⏰ ========== EJECUTANDO CRON JOB DE RECORDATORIOS ==========');
+  console.log('Hora:', new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }));
+  try {
+    await enviarRecordatoriosDiarios();
+  } catch (error) {
+    console.error('❌ Error en cron job:', error);
+  }
 }, {
-  timezone: 'America/Mexico_City'
+  timezone: 'America/Mexico_City',
+  scheduled: true
 });
 
-// ─── Manejo de errores ──────────────────────────────────────────────────────
-app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.stack);
-  res.status(500).json({
-    message: 'Error del servidor',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
+console.log('⏰ Cron job configurado para ejecutarse a las 6:30 PM todos los días (hora México)');
 
-// ─── Iniciar servidor ───────────────────────────────────────────────────────
+const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
-  console.log('');
-  console.log('🚀 ========== SERVIDOR INICIADO ==========');
-  console.log(`📍 Puerto: ${PORT}`);
-  console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`💾 MongoDB: Conectado`);
-  console.log(`📱 WhatsApp: Whapi.cloud`);
-  console.log(`📅 Google Calendar: Service Account`);
-  console.log(`⏰ Cron: Recordatorios a las 6:30 PM`);
-  console.log(`📨 Whapi webhook: /api/whapi/webhook`);
-  console.log('==========================================');
-  console.log('');
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`🌐 URL: ${process.env.BACKEND_URL || `http://localhost:${PORT}`}`);
+  console.log(`📅 Sincronizado con Google Calendar`);
+  console.log(`📱 WhatsApp integrado con Whapi.cloud`);
 });

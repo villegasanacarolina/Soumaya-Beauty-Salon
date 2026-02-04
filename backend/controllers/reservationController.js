@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import Reservation from '../models/Reservation.js';
 import {
   enviarConfirmacionCita,
@@ -88,17 +87,19 @@ export const createReservation = async (req, res) => {
       duracion,
       precio,
       estado:          'confirmada',
-      esperandoRespuesta: false,  // Se activará cuando envíe confirmación
+      esperandoRespuesta: false,
       recordatorioEnviado: false
     });
 
     console.log('✅ RESERVA CREADA:', reservation._id);
 
     // ── 2. Crear evento en Google Calendar ──────────────────────────────
+    let calendarEventId = null;
     try {
       const calendarResult = await crearEventoCalendar(reservation);
       if (calendarResult.success) {
         reservation.googleCalendarEventId = calendarResult.eventId;
+        calendarEventId = calendarResult.eventId;
         await reservation.save();
         console.log('✅ Evento en Google Calendar:', calendarResult.eventId);
       }
@@ -110,7 +111,6 @@ export const createReservation = async (req, res) => {
     try {
       const resultadoConfirmacion = await enviarConfirmacionCita(reservation);
       if (resultadoConfirmacion.success) {
-        // Marcar que está esperando respuesta
         reservation.esperandoRespuesta = true;
         await reservation.save();
         console.log('✅ WhatsApp de confirmación enviado al cliente');
@@ -129,14 +129,22 @@ export const createReservation = async (req, res) => {
 
     console.log('========== FIN CREAR RESERVA ==========');
 
-    res.status(201).json(reservation.toObject());
+    // ── 5. Generar WhatsApp deep link ───────────────────────────────────
+    const whatsappDeepLink = `https://wa.me/521${req.user.telefono}?text=Hola ${encodeURIComponent(req.user.nombreCompleto)}, tu cita para ${serviceDurations[servicio].nombre} el ${fecha} a las ${horaInicio} ha sido confirmada. ¿Deseas cancelar? Responde Sí o No.`;
+
+    res.status(201).json({
+      ...reservation.toObject(),
+      whatsappDeepLink,
+      calendarEventId,
+      message: 'Reserva creada exitosamente. Se ha enviado confirmación por WhatsApp.'
+    });
 
   } catch (error) {
     console.error('❌ ERROR:', error);
     if (error.code === 11000) {
       return res.status(400).json({ message: 'Este horario ya está reservado' });
     }
-    res.status(500).json({ message: 'Error al crear la reserva' });
+    res.status(500).json({ message: 'Error al crear la reserva', error: error.message });
   }
 };
 
@@ -163,14 +171,28 @@ export const getWeekAvailability = async (req, res) => {
     const reservas = await Reservation.find({
       fecha: { $gte: fechaInicio, $lte: fechaFin },
       estado: 'confirmada'
-    });
+    }).sort({ fecha: 1, horaInicio: 1 });
 
-    console.log(`✅ Reservas confirmadas: ${reservas.length}`);
-    res.json(reservas);
+    console.log(`📊 Disponibilidad semanal: ${reservas.length} reservas confirmadas`);
+    
+    // Formatear respuesta
+    const disponibilidad = reservas.map(reserva => ({
+      _id: reserva._id,
+      servicio: reserva.servicio,
+      nombreCliente: reserva.nombreCliente,
+      fecha: reserva.fecha,
+      horaInicio: reserva.horaInicio,
+      horaFin: reserva.horaFin,
+      duracion: reserva.duracion,
+      servicioNombre: serviceDurations[reserva.servicio]?.nombre,
+      googleCalendarEventId: reserva.googleCalendarEventId
+    }));
+
+    res.json(disponibilidad);
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al obtener disponibilidad' });
+    res.status(500).json({ message: 'Error al obtener disponibilidad', error: error.message });
   }
 };
 
@@ -194,6 +216,7 @@ export const getUserReservations = async (req, res) => {
         horaInicio:     reserva.horaInicio,
         horaFin:        reserva.horaFin,
         duracion:       reserva.duracion,
+        precio:         reserva.precio,
         estado:         reserva.estado,
         nombreCliente:  reserva.nombreCliente,
         servicioNombre: serviceDurations[reserva.servicio]?.nombre,
@@ -202,15 +225,20 @@ export const getUserReservations = async (req, res) => {
           year:    'numeric',
           month:   'long',
           day:     'numeric'
-        })
+        }),
+        googleCalendarEventId: reserva.googleCalendarEventId,
+        esperandoRespuesta: reserva.esperandoRespuesta,
+        recordatorioEnviado: reserva.recordatorioEnviado,
+        createdAt: reserva.createdAt
       };
     });
 
+    console.log(`📋 Reservas del usuario ${req.user.nombreCompleto}: ${reservations.length}`);
     res.json(reservasFormateadas);
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al obtener reservas' });
+    res.status(500).json({ message: 'Error al obtener reservas', error: error.message });
   }
 };
 
@@ -219,8 +247,9 @@ export const getUserReservations = async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 export const cancelReservation = async (req, res) => {
   try {
-    console.log('❌ ========== CANCELAR RESERVA ==========');
+    console.log('❌ ========== CANCELAR RESERVA DESDE WEB ==========');
     console.log('ID:', req.params.id);
+    console.log('Usuario:', req.user.nombreCompleto);
 
     const reservation = await Reservation.findById(req.params.id);
 
@@ -230,6 +259,10 @@ export const cancelReservation = async (req, res) => {
 
     if (reservation.usuario.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'No autorizado' });
+    }
+
+    if (reservation.estado === 'cancelada') {
+      return res.status(400).json({ message: 'La reserva ya está cancelada' });
     }
 
     // Cancelar en MongoDB
@@ -255,11 +288,19 @@ export const cancelReservation = async (req, res) => {
       console.error('⚠️ Error notificando salón:', e.message);
     }
 
+    // Confirmar cancelación al cliente
+    try {
+      await enviarMensajeCancelacionConfirmada(reservation);
+      console.log('✅ Confirmación de cancelación enviada al cliente');
+    } catch (e) {
+      console.error('⚠️ Error enviando confirmación:', e.message);
+    }
+
     console.log('✅ Reserva cancelada:', reservation._id);
     console.log('========== FIN CANCELAR ==========');
 
     res.json({
-      message: 'Reserva cancelada',
+      message: 'Reserva cancelada exitosamente',
       reservation: {
         _id:    reservation._id,
         estado: reservation.estado
@@ -268,7 +309,7 @@ export const cancelReservation = async (req, res) => {
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al cancelar reserva' });
+    res.status(500).json({ message: 'Error al cancelar reserva', error: error.message });
   }
 };
 
@@ -277,6 +318,9 @@ export const cancelReservation = async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 export const deleteReservation = async (req, res) => {
   try {
+    console.log('🗑️ ========== ELIMINAR RESERVA DEL HISTORIAL ==========');
+    console.log('ID:', req.params.id);
+
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
@@ -287,6 +331,16 @@ export const deleteReservation = async (req, res) => {
       return res.status(403).json({ message: 'No autorizado' });
     }
 
+    // Si la reserva está confirmada y tiene evento en Google Calendar, eliminarlo
+    if (reservation.estado === 'confirmada' && reservation.googleCalendarEventId) {
+      try {
+        await eliminarEventoCalendar(reservation.googleCalendarEventId);
+        console.log('✅ Evento eliminado de Google Calendar');
+      } catch (e) {
+        console.error('⚠️ Error eliminando de Google Calendar:', e.message);
+      }
+    }
+
     await Reservation.findByIdAndDelete(req.params.id);
     console.log('🗑️ Reserva eliminada:', req.params.id);
 
@@ -294,6 +348,58 @@ export const deleteReservation = async (req, res) => {
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al eliminar reserva' });
+    res.status(500).json({ message: 'Error al eliminar reserva', error: error.message });
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SINCORNIZAR CON GOOGLE CALENDAR (para administración)
+// ═══════════════════════════════════════════════════════════════════════════
+export const syncWithGoogleCalendar = async (req, res) => {
+  try {
+    console.log('🔄 ========== SINCORNIZAR CON GOOGLE CALENDAR ==========');
+    
+    const reservasSinEvento = await Reservation.find({
+      estado: 'confirmada',
+      googleCalendarEventId: { $in: [null, ''] }
+    });
+
+    console.log(`📊 ${reservasSinEvento.length} reservas sin evento en Google Calendar`);
+
+    let creados = 0;
+    let errores = 0;
+
+    for (const reserva of reservasSinEvento) {
+      try {
+        const resultado = await crearEventoCalendar(reserva);
+        if (resultado.success) {
+          reserva.googleCalendarEventId = resultado.eventId;
+          await reserva.save();
+          creados++;
+          console.log(`✅ Evento creado para reserva ${reserva._id}`);
+        } else {
+          errores++;
+          console.error(`❌ Error creando evento para reserva ${reserva._id}:`, resultado.error);
+        }
+      } catch (error) {
+        errores++;
+        console.error(`❌ Error sincronizando reserva ${reserva._id}:`, error.message);
+      }
+    }
+
+    console.log('🔄 Sincronización completada');
+    console.log(`✅ Creados: ${creados}`);
+    console.log(`❌ Errores: ${errores}`);
+
+    res.json({
+      message: 'Sincronización completada',
+      total: reservasSinEvento.length,
+      creados,
+      errores
+    });
+
+  } catch (error) {
+    console.error('❌ ERROR:', error);
+    res.status(500).json({ message: 'Error en sincronización', error: error.message });
   }
 };

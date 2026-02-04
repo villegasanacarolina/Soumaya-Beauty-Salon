@@ -5,15 +5,15 @@ const Galeria = () => {
   const [selectedImage, setSelectedImage] = useState(null);
 
   const images = [
-    { id: 1, src: '/images/galeria/1.jpg', category: 'uñas', alt: 'Diseño de uñas gel' },
-    { id: 2, src: '/images/galeria/2.jpg', category: 'cabello', alt: 'Tratamiento de keratina' },
-    { id: 3, src: '/images/galeria/3.jpg', category: 'pestañas', alt: 'Extensión de pestañas' },
-    { id: 4, src: '/images/galeria/4.jpg', category: 'uñas', alt: 'Uñas acrílicas' },
-    { id: 5, src: '/images/galeria/5.jpg', category: 'cejas', alt: 'Diseño de cejas' },
-    { id: 6, src: '/images/galeria/6.jpg', category: 'cabello', alt: 'Tinte profesional' },
-    { id: 7, src: '/images/galeria/7.jpg', category: 'pedicure', alt: 'Pedicure premium' },
-    { id: 8, src: '/images/galeria/8.jpg', category: 'uñas', alt: 'Arte en uñas' },
-    { id: 9, src: '/images/galeria/9.jpg', category: 'cabello', alt: 'Corte y peinado' },
+    { id: 1, src: '/images/galeria/obra-1.jpg', category: 'uñas', alt: 'Diseño de uñas gel' },
+    { id: 2, src: '/images/galeria/obra-2.jpg', category: 'cabello', alt: 'Tratamiento de keratina' },
+    { id: 3, src: '/images/galeria/obra-3.jpg', category: 'pestañas', alt: 'Extensión de pestañas' },
+    { id: 4, src: '/images/galeria/obra-4.jpg', category: 'uñas', alt: 'Uñas acrílicas' },
+    { id: 5, src: '/images/galeria/obra-5.jpg', category: 'cejas', alt: 'Diseño de cejas' },
+    { id: 6, src: '/images/galeria/obra-6.jpg', category: 'cabello', alt: 'Tinte profesional' },
+    { id: 7, src: '/images/galeria/obra-7.jpg', category: 'pedicure', alt: 'Pedicure premium' },
+    { id: 8, src: '/images/galeria/obra-8.jpg', category: 'uñas', alt: 'Arte en uñas' },
+    { id: 9, src: '/images/galeria/obra-9.jpg', category: 'cabello', alt: 'Corte y peinado' },
   ];
 
   return (

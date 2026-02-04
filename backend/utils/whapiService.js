@@ -28,12 +28,17 @@ const formatearFecha = (fecha) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Helper: Formatear teléfono para Whapi
+// Helper: Formatear teléfono para Whapi (MÉXICO)
 // ═══════════════════════════════════════════════════════════════════════════
-// FORMATO CORRECTO PARA WHATSAPP MÉXICO:
-// - La DB guarda solo 10 dígitos: 5551234567
-// - WhatsApp/Whapi necesita: 521234567890@s.whatsapp.net (código país + número)
-// - NO usar el "1" adicional después del 52 (es formato antiguo)
+// IMPORTANTE PARA NÚMEROS DE MÉXICO:
+// - WhatsApp internamente usa el formato: 521XXXXXXXXXX (13 dígitos)
+// - El "1" después del "52" es NECESARIO para números móviles mexicanos
+// - Sin el "1", WhatsApp crea un chat NUEVO/DUPLICADO
+// - Referencia: https://support.whapi.cloud/help-desk/faq/specifics-of-sending-messages-to-numbers-of-different-countries
+// 
+// Formato correcto para Whapi: 521XXXXXXXXXX@s.whatsapp.net
+// Donde XXXXXXXXXX son los 10 dígitos del número mexicano
+// ═══════════════════════════════════════════════════════════════════════════
 const formatearTelefonoWhapi = (telefono) => {
   console.log('📞 ========== FORMATEANDO TELÉFONO PARA WHAPI ==========');
   console.log('📞 Teléfono recibido:', telefono);
@@ -42,15 +47,15 @@ const formatearTelefonoWhapi = (telefono) => {
   let numeros = telefono.replace(/\D/g, '');
   console.log('📞 Solo números:', numeros);
   
-  // 2. Si tiene código de país (52 o 521), quitarlo para quedarnos con 10 dígitos
-  if (numeros.length === 12 && numeros.startsWith('52')) {
-    // Formato: 521234567890 (52 + 10 dígitos)
-    numeros = numeros.slice(2);
-    console.log('📞 Removido prefijo 52:', numeros);
-  } else if (numeros.length === 13 && numeros.startsWith('521')) {
-    // Formato antiguo: 5211234567890 (521 + 10 dígitos)
+  // 2. Normalizar a 10 dígitos (quitar cualquier prefijo existente)
+  if (numeros.length === 13 && numeros.startsWith('521')) {
+    // Ya tiene formato 521 + 10 dígitos, extraer los 10
     numeros = numeros.slice(3);
     console.log('📞 Removido prefijo 521:', numeros);
+  } else if (numeros.length === 12 && numeros.startsWith('52')) {
+    // Tiene formato 52 + 10 dígitos (sin el 1)
+    numeros = numeros.slice(2);
+    console.log('📞 Removido prefijo 52:', numeros);
   } else if (numeros.length > 10) {
     // Cualquier otro caso, tomar los últimos 10 dígitos
     numeros = numeros.slice(-10);
@@ -63,10 +68,12 @@ const formatearTelefonoWhapi = (telefono) => {
     throw new Error(`Teléfono debe tener 10 dígitos. Recibido: ${numeros.length} dígitos`);
   }
   
-  // 4. Formato final para Whapi: solo 10 dígitos + @s.whatsapp.net
-  const telefonoFormateado = `${numeros}@s.whatsapp.net`;
+  // 4. Formato final para Whapi MÉXICO: 521 + 10 dígitos + @s.whatsapp.net
+  // IMPORTANTE: El "1" después del "52" es OBLIGATORIO para que WhatsApp
+  // envíe al chat correcto y no cree uno duplicado
+  const telefonoFormateado = `521${numeros}@s.whatsapp.net`;
   
-  console.log('✅ Teléfono formateado para Whapi:', telefonoFormateado);
+  console.log('✅ Teléfono formateado para Whapi (México):', telefonoFormateado);
   console.log('📞 =====================================================');
   
   return telefonoFormateado;
@@ -94,12 +101,12 @@ const enviarMensajeWhapi = async (telefono, mensaje) => {
           'Authorization': `Bearer ${WHAPI_TOKEN}`,
           'Content-Type': 'application/json'
         },
-        timeout: 10000
+        timeout: 15000
       }
     );
     
     console.log('✅ WhatsApp enviado exitosamente');
-    console.log('📤 Response:', JSON.stringify(response.data, null, 2));
+    console.log('📤 Response ID:', response.data?.message?.id || response.data?.id);
     console.log('📤 ==========================================');
     
     return { success: true, data: response.data };
@@ -339,11 +346,12 @@ export const notificarSalonCancelacion = async (reserva) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 6. PROCESAR MENSAJES ENTRANTES (para webhook)
 // ═══════════════════════════════════════════════════════════════════════════
-// Cuando llega un mensaje de WhatsApp, viene en formato: 521234567890@s.whatsapp.net
+// Cuando llega un mensaje de WhatsApp México, viene en formato:
+// 521XXXXXXXXXX@s.whatsapp.net (con el "1" después del 52)
 // Necesitamos extraer solo los 10 dígitos para buscar en la DB
 export const procesarMensajeEntrante = (mensaje) => {
   try {
-    const from = mensaje.from; // Formato: 521234567890@s.whatsapp.net
+    const from = mensaje.from; // Formato: 521XXXXXXXXXX@s.whatsapp.net
     const texto = mensaje.text?.body?.toLowerCase().trim() || '';
     
     console.log('📨 ========== PROCESANDO MENSAJE ENTRANTE ==========');
@@ -354,14 +362,15 @@ export const procesarMensajeEntrante = (mensaje) => {
     const numeros = from.replace(/\D/g, '');
     console.log('📞 Solo números:', numeros);
     
-    // Extraer los últimos 10 dígitos (quitar el código de país 52)
+    // Extraer los 10 dígitos del número mexicano
     let telefono = numeros;
-    if (numeros.length === 12 && numeros.startsWith('52')) {
-      // Formato normal: 521234567890
-      telefono = numeros.slice(2);
-    } else if (numeros.length === 13 && numeros.startsWith('521')) {
-      // Formato con 1 adicional: 5211234567890
+    
+    if (numeros.length === 13 && numeros.startsWith('521')) {
+      // Formato correcto México: 521XXXXXXXXXX → extraer últimos 10
       telefono = numeros.slice(3);
+    } else if (numeros.length === 12 && numeros.startsWith('52')) {
+      // Formato sin el 1: 52XXXXXXXXXX → extraer últimos 10
+      telefono = numeros.slice(2);
     } else if (numeros.length > 10) {
       // Cualquier otro caso, tomar los últimos 10
       telefono = numeros.slice(-10);

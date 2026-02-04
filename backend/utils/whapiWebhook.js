@@ -15,14 +15,14 @@ const buscarReservaPendiente = async (telefono) => {
     console.log('🔍 ========== BUSCANDO RESERVA PENDIENTE ==========');
     console.log('🔍 Teléfono recibido:', telefono);
     
-    // Asegurar que el teléfono tenga exactamente 10 dígitos
+    // Normalizar teléfono a 10 dígitos
     let telefono10 = telefono.replace(/\D/g, '');
     
-    // Si tiene código de país, quitarlo
-    if (telefono10.length === 12 && telefono10.startsWith('52')) {
-      telefono10 = telefono10.slice(2);
-    } else if (telefono10.length === 13 && telefono10.startsWith('521')) {
+    // Quitar prefijos de México si existen
+    if (telefono10.length === 13 && telefono10.startsWith('521')) {
       telefono10 = telefono10.slice(3);
+    } else if (telefono10.length === 12 && telefono10.startsWith('52')) {
+      telefono10 = telefono10.slice(2);
     } else if (telefono10.length > 10) {
       telefono10 = telefono10.slice(-10);
     }
@@ -36,9 +36,9 @@ const buscarReservaPendiente = async (telefono) => {
 
     // Buscar la reserva confirmada más reciente de este teléfono
     // que esté esperando respuesta
-    // NOTA: En la DB guardamos solo 10 dígitos, así que buscamos directamente
+    // NOTA: En la DB guardamos solo 10 dígitos
     const reservas = await Reservation.find({
-      telefonoCliente: telefono10, // Búsqueda exacta de 10 dígitos
+      telefonoCliente: telefono10,
       estado: 'confirmada',
       esperandoRespuesta: true
     }).sort({ createdAt: -1 }).limit(1);
@@ -97,7 +97,6 @@ export const handleWhapiWebhook = async (req, res) => {
 
       if (!reserva) {
         console.log('⚠️ No hay reserva pendiente para este número');
-        // Podrías enviar un mensaje de ayuda aquí
         continue;
       }
 
@@ -160,16 +159,11 @@ export const handleWhapiWebhook = async (req, res) => {
         console.log('✅ Cliente confirmó que MANTIENE la cita');
         console.log('✅ Estado actualizado en MongoDB');
         console.log('✅ ========================================');
-        
-        // Opcional: Enviar mensaje de confirmación de mantenimiento
-        // await enviarMensajeWhapi(datos.telefono, '✅ Perfecto, mantendremos tu cita. ¡Te esperamos!');
       }
       // ─── RESPUESTA NO RECONOCIDA ───────────────────────────────────────
       else {
         console.log('⚠️ Respuesta no reconocida, se ignora');
         console.log('⚠️ Texto recibido:', datos.texto);
-        // Opcional: Enviar mensaje de ayuda
-        // await enviarMensajeWhapi(datos.telefono, 'Por favor responde SÍ para cancelar o NO para mantener tu cita.');
       }
     }
 

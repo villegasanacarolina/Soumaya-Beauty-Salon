@@ -63,9 +63,8 @@ const formatearTelefonoWhapi = (telefono) => {
     throw new Error(`Teléfono debe tener 10 dígitos. Recibido: ${numeros.length} dígitos`);
   }
   
-  // 4. Formato final para Whapi: 52 + 10 dígitos + @s.whatsapp.net
-  // NOTA: Para México, el formato correcto es 52XXXXXXXXXX (sin el 1 adicional)
-  const telefonoFormateado = `52${numeros}@s.whatsapp.net`;
+  // 4. Formato final para Whapi: solo 10 dígitos + @s.whatsapp.net
+  const telefonoFormateado = `${numeros}@s.whatsapp.net`;
   
   console.log('✅ Teléfono formateado para Whapi:', telefonoFormateado);
   console.log('📞 =====================================================');

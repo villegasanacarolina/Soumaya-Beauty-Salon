@@ -6,7 +6,7 @@ import { Phone, Lock, User } from 'lucide-react';
 const Login = () => {
   const [isRegister, setIsRegister] = useState(false);
   const [nombreCompleto, setNombreCompleto] = useState('');
-  const [telefono, setTelefono] = useState('');
+  const [telefono, setTelefono] = useState('+52 ');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -14,12 +14,41 @@ const Login = () => {
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
+  const handlePhoneChange = (e) => {
+    let value = e.target.value;
+    
+    // Asegurar que comienza con +52
+    if (!value.startsWith('+52')) {
+      value = '+52 ' + value.replace(/[^0-9]/g, '');
+    }
+    
+    // Limitar a 10 dígitos después de +52
+    const digits = value.replace(/[^0-9]/g, '');
+    if (digits.length <= 12) { // +52 (3) + 10 dígitos = 13 caracteres total
+      // Formatear: +52 XXX XXX XXXX
+      if (digits.length > 3) {
+        const formatted = `+52 ${digits.substring(3, 6)} ${digits.substring(6, 9)} ${digits.substring(9, 13)}`;
+        setTelefono(formatted.trim());
+      } else {
+        setTelefono(`+52 ${digits.substring(3)}`);
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
+      // Validar teléfono (10 dígitos después de +52)
+      const phoneDigits = telefono.replace(/[^0-9]/g, '');
+      if (phoneDigits.length !== 12) { // +52 (3) + 10 = 13, pero quitamos el + = 12
+        setError('El teléfono debe tener 10 dígitos después de +52');
+        setLoading(false);
+        return;
+      }
+
       let result;
       if (isRegister) {
         if (!nombreCompleto || !telefono || !password) {
@@ -96,7 +125,7 @@ const Login = () => {
             </div>
           )}
 
-          {/* Teléfono */}
+          {/* Teléfono con prefijo fijo */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
               Teléfono
@@ -106,14 +135,15 @@ const Login = () => {
               <input
                 type="tel"
                 value={telefono}
-                onChange={(e) => setTelefono(e.target.value)}
+                onChange={handlePhoneChange}
                 className="w-full pl-12 pr-4 py-3 border-2 border-input rounded-lg focus:border-primary focus:outline-none bg-background text-foreground"
-                placeholder="+52 555 123 4567"
+                placeholder="+52 351 123 4567"
                 required
+                maxLength={17} // +52 XXX XXX XXXX
               />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Formato internacional: +52 seguido de tu número
+              Formato: +52 seguido de 10 dígitos
             </p>
           </div>
 
@@ -158,7 +188,7 @@ const Login = () => {
               setIsRegister(!isRegister);
               setError('');
               setNombreCompleto('');
-              setTelefono('');
+              setTelefono('+52 ');
               setPassword('');
             }}
             className="text-primary hover:underline"

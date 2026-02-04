@@ -7,6 +7,31 @@ import { Clock, DollarSign, Check, ArrowRight, ArrowLeft } from 'lucide-react';
 export default function ServicioDetalle({ servicio }) {
   const serviciosRelacionados = getServiciosRelacionados(servicio.relacionados);
 
+  // MAPA DE SLUG A PREFIJO
+  const prefixMap = {
+    'unas-gel': 'gel',
+    'unas-acrilicas': 'acrilicas',
+    'pedicure': 'pedicure',
+    'keratina': 'keratina',
+    'tinte': 'tinte',
+    'pestanas': 'pestanas',
+    'cejas': 'cejas'
+  };
+
+  const prefix = prefixMap[servicio.slug] || servicio.slug;
+
+  // CARRUSEL PRINCIPAL (3 imágenes: 1-3)
+  const carruselImages = [
+    `/images/servicios/${servicio.slug}/${prefix}-1.jpg`,
+    `/images/servicios/${servicio.slug}/${prefix}-2.jpg`,
+    `/images/servicios/${servicio.slug}/${prefix}-3.jpg`
+  ];
+
+  // GRID 3x3 (9 imágenes: 1-9)
+  const gridImages = Array.from({ length: 9 }, (_, i) => 
+    `/images/servicios/${servicio.slug}/${prefix}-${i + 1}.jpg`
+  );
+
   const breadcrumbItems = [
     { label: 'Servicios', href: '/servicios' },
     { label: servicio.nombre }
@@ -40,7 +65,7 @@ export default function ServicioDetalle({ servicio }) {
 
       {/* Carrusel */}
       <section className="py-8 px-4">
-        <Carousel images={servicio.carrusel} />
+        <Carousel images={carruselImages} />
       </section>
 
       {/* Información principal */}
@@ -74,7 +99,7 @@ export default function ServicioDetalle({ servicio }) {
             </div>
 
             {/* ¿Qué incluye? */}
-            <div>
+            <div className="mb-12">
               <h2 className="text-3xl font-alex-brush text-rosa mb-6">
                 ¿Qué incluye?
               </h2>
@@ -86,6 +111,24 @@ export default function ServicioDetalle({ servicio }) {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            {/* Carrusel Grid 3x3 */}
+            <div>
+              <h2 className="text-3xl font-alex-brush text-rosa mb-6">
+                Galería del Servicio
+              </h2>
+              <div className="grid grid-cols-3 gap-4">
+                {gridImages.map((image, index) => (
+                  <div key={index} className="aspect-square overflow-hidden rounded-lg">
+                    <img
+                      src={image}
+                      alt={`${servicio.nombre} - Imagen ${index + 1}`}
+                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -152,7 +195,7 @@ export default function ServicioDetalle({ servicio }) {
                 >
                   <div className="relative h-48 overflow-hidden">
                     <img
-                      src={servicioRel.imagenPrincipal}
+                      src={`/images/servicios/${servicioRel.slug}/${prefixMap[servicioRel.slug] || servicioRel.slug}-main.jpg`}
                       alt={servicioRel.nombre}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       loading="lazy"

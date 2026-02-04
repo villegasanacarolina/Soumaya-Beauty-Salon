@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Send, Phone, Mail, MapPin } from 'lucide-react';
+import { Send, Phone, Mail, MapPin, Facebook, Instagram, MessageCircle } from 'lucide-react';
 
 const Contacto = () => {
   const [formData, setFormData] = useState({
@@ -165,6 +165,35 @@ const Contacto = () => {
 
             {/* Información de Contacto */}
             <div className="space-y-6">
+              {/* Mapa */}
+              <div className="bg-card p-6 rounded-2xl shadow-lg">
+                <h2 className="text-3xl font-alex-brush text-primary mb-6">
+                  Ubicación
+                </h2>
+                <div className="aspect-video rounded-lg overflow-hidden">
+                  <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3700.123456789!2d-100.987654321!3d22.123456789!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjLCsDA5JzAwLjAiTiAxMDDCsDU4JzMwLjAiVw!5e0!3m2!1ses!2smx!4v1234567890"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title="Ubicación Soumaya Beauty Salon"
+                  ></iframe>
+                </div>
+              </div>
+
+              {/* Imagen del salón */}
+              <div className="bg-card rounded-2xl shadow-lg overflow-hidden">
+                <img
+                  src="/images/contacto/salon-interior.jpg"
+                  alt="Interior del Soumaya Beauty Salon"
+                  className="w-full h-64 object-cover"
+                />
+              </div>
+
+              {/* Información de contacto */}
               <div className="bg-card p-6 rounded-2xl shadow-lg">
                 <h2 className="text-3xl font-alex-brush text-primary mb-6">
                   Información de Contacto
@@ -201,6 +230,42 @@ const Contacto = () => {
                         San Luis Potosí, SLP 78000
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                {/* Redes Sociales */}
+                <div className="mt-8 pt-6 border-t border-border">
+                  <h3 className="text-xl font-alex-brush text-primary mb-4">
+                    Síguenos en redes
+                  </h3>
+                  <div className="flex gap-4">
+                    <a
+                      href="https://facebook.com/soumayabeautysalon"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      <Facebook className="w-5 h-5" />
+                      Facebook
+                    </a>
+                    <a
+                      href="https://instagram.com/soumayabeautysalon"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      <Instagram className="w-5 h-5" />
+                      Instagram
+                    </a>
+                    <a
+                      href="https://wa.me/523511270276"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      WhatsApp
+                    </a>
                   </div>
                 </div>
               </div>

@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Sun, Moon, Home, Scissors, Image as ImageIcon, MapPin, Phone, LogIn, Calendar } from 'lucide-react';
+import { Menu, X, Sun, Moon, Home, Scissors, Image as ImageIcon, MapPin, Phone, LogIn, Calendar, User } from 'lucide-react';
 import AnimatedLogo from './AnimatedLogo';
 import './Navbar.css';
 import { useTheme } from './theme-provider';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { user, logout } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
@@ -20,7 +22,6 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Cerrar menú al cambiar de ruta
   useEffect(() => {
     setIsMenuOpen(false);
   }, [location]);
@@ -35,9 +36,12 @@ export default function Navbar() {
     { to: '/galeria', icon: ImageIcon, label: 'Galería' },
     { to: '/ubicaciones', icon: MapPin, label: 'Ubicación' },
     { to: '/contacto', icon: Phone, label: 'Contacto' },
-    { to: '/login', icon: LogIn, label: 'Login' },
-    { to: '/reservaciones', icon: Calendar, label: 'Reservaciones' },
   ];
+
+  // Si el usuario está autenticado, mostrar Reservaciones en lugar de Login
+  if (user) {
+    navLinks.push({ to: '/reservaciones', icon: Calendar, label: 'Reservaciones' });
+  }
 
   return (
     <>
@@ -50,13 +54,40 @@ export default function Navbar() {
           )}
 
           <div className="navbar-controls">
-            <button
-              onClick={toggleTheme}
-              className="theme-toggle"
-              aria-label="Cambiar tema"
-            >
-              {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
-            </button>
+            {/* Botón de Login/Usuario */}
+            <div className="flex items-center gap-4">
+              {user ? (
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-primary" />
+                  <span className="text-sm text-foreground hidden md:inline">
+                    {user.nombreCompleto?.split(' ')[0]}
+                  </span>
+                  <button
+                    onClick={logout}
+                    className="px-3 py-1.5 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Cerrar Sesión
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  <LogIn className="w-5 h-5" />
+                  <span className="hidden md:inline">Login</span>
+                </Link>
+              )}
+
+              {/* Toggle de tema */}
+              <button
+                onClick={toggleTheme}
+                className="theme-toggle"
+                aria-label="Cambiar tema"
+              >
+                {theme === 'dark' ? <Sun size={24} /> : <Moon size={24} />}
+              </button>
+            </div>
 
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -106,6 +137,25 @@ export default function Navbar() {
               </Link>
             );
           })}
+          
+          {/* Enlace de Login/Logout en el menú móvil */}
+          {user ? (
+            <button
+              onClick={logout}
+              className="menu-link"
+            >
+              <LogIn className="menu-link-icon" />
+              <span className="menu-link-text">Cerrar Sesión</span>
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              className={`menu-link ${location.pathname === '/login' ? 'active' : ''}`}
+            >
+              <LogIn className="menu-link-icon" />
+              <span className="menu-link-text">Login</span>
+            </Link>
+          )}
         </nav>
       </div>
     </>

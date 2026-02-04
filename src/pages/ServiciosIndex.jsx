@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock, DollarSign } from 'lucide-react';
+import { Clock, DollarSign, ArrowRight } from 'lucide-react';
 
 const ServiciosIndex = () => {
   const servicios = [
@@ -9,7 +9,7 @@ const ServiciosIndex = () => {
       descripcion: 'Manicure profesional con acabado perfecto y duradero',
       precio: '$450',
       duracion: '60 min',
-      imagen: '/images/servicios/unas-gel.jpg',
+      imagen: '/images/servicios/unas-gel/gel-main.jpg',
     },
     {
       id: 'unas-acrilicas',
@@ -17,7 +17,7 @@ const ServiciosIndex = () => {
       descripcion: 'Uñas con extensión de acrílico y diseños personalizados',
       precio: '$600',
       duracion: '90 min',
-      imagen: '/images/servicios/unas-acrilicas.jpg',
+      imagen: '/images/servicios/unas-acrilicas/acrilicas-main.jpg',
     },
     {
       id: 'pedicure',
@@ -25,7 +25,7 @@ const ServiciosIndex = () => {
       descripcion: 'Tratamiento completo para pies con exfoliación y masaje',
       precio: '$500',
       duracion: '90 min',
-      imagen: '/images/servicios/pedicure.jpg',
+      imagen: '/images/servicios/pedicure/pedicure-main.jpg',
     },
     {
       id: 'keratina',
@@ -33,7 +33,7 @@ const ServiciosIndex = () => {
       descripcion: 'Cabello suave, brillante y sin frizz por meses',
       precio: '$1,200',
       duracion: '180 min',
-      imagen: '/images/servicios/keratina.jpg',
+      imagen: '/images/servicios/keratina/keratina-main.jpg',
     },
     {
       id: 'tinte',
@@ -41,7 +41,7 @@ const ServiciosIndex = () => {
       descripcion: 'Coloración profesional con productos de alta calidad',
       precio: '$800',
       duracion: '180 min',
-      imagen: '/images/servicios/tinte.jpg',
+      imagen: '/images/servicios/tinte/tinte-main.jpg',
     },
     {
       id: 'pestanas',
@@ -49,7 +49,7 @@ const ServiciosIndex = () => {
       descripcion: 'Mirada impactante con pestañas naturales y voluminosas',
       precio: '$900',
       duracion: '60 min',
-      imagen: '/images/servicios/pestanas.jpg',
+      imagen: '/images/servicios/pestanas/pestanas-main.jpg',
     },
     {
       id: 'cejas',
@@ -57,7 +57,7 @@ const ServiciosIndex = () => {
       descripcion: 'Perfilado y diseño profesional de cejas',
       precio: '$350',
       duracion: '30 min',
-      imagen: '/images/servicios/cejas.jpg',
+      imagen: '/images/servicios/cejas/cejas-main.jpg',
     },
   ];
 
@@ -80,9 +80,8 @@ const ServiciosIndex = () => {
         <div className="container mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {servicios.map((servicio) => (
-              <Link
+              <div
                 key={servicio.id}
-                to={`/servicios/${servicio.id}`}
                 className="group bg-card rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2"
               >
                 <div className="aspect-video overflow-hidden">
@@ -99,7 +98,7 @@ const ServiciosIndex = () => {
                   <p className="text-foreground mb-4">
                     {servicio.descripcion}
                   </p>
-                  <div className="flex items-center justify-between text-muted-foreground">
+                  <div className="flex items-center justify-between mb-6 text-muted-foreground">
                     <div className="flex items-center gap-2">
                       <DollarSign className="w-5 h-5" />
                       <span className="font-semibold">{servicio.precio}</span>
@@ -109,8 +108,17 @@ const ServiciosIndex = () => {
                       <span>{servicio.duracion}</span>
                     </div>
                   </div>
+                  
+                  {/* Botón Ver más */}
+                  <Link
+                    to={`/servicios/${servicio.id}`}
+                    className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+                  >
+                    Ver más
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </div>

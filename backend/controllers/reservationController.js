@@ -87,7 +87,7 @@ export const createReservation = async (req, res) => {
       duracion,
       precio,
       estado:          'confirmada',
-      esperandoRespuesta: false,
+      esperandoRespuesta: true,  // Inmediatamente esperando respuesta
       recordatorioEnviado: false
     });
 
@@ -108,35 +108,43 @@ export const createReservation = async (req, res) => {
     }
 
     // ── 3. Enviar WhatsApp de confirmación al cliente ───────────────────
+    let whatsappEnviado = false;
+    let whatsappError = null;
     try {
       const resultadoConfirmacion = await enviarConfirmacionCita(reservation);
       if (resultadoConfirmacion.success) {
-        reservation.esperandoRespuesta = true;
-        await reservation.save();
-        console.log('✅ WhatsApp de confirmación enviado al cliente');
+        whatsappEnviado = true;
+        console.log('✅ WhatsApp de confirmación enviado AUTOMÁTICAMENTE al cliente');
+      } else {
+        whatsappError = resultadoConfirmacion.error;
+        console.error('⚠️ Error enviando WhatsApp:', resultadoConfirmacion.error);
       }
     } catch (e) {
+      whatsappError = e.message;
       console.error('⚠️ Error enviando confirmación:', e.message);
     }
 
     // ── 4. Notificar al salón ───────────────────────────────────────────
+    let salonNotificado = false;
     try {
       await notificarSalonNuevaCita(reservation);
-      console.log('✅ Salón notificado');
+      salonNotificado = true;
+      console.log('✅ Salón notificado AUTOMÁTICAMENTE');
     } catch (e) {
       console.error('⚠️ Error notificando salón:', e.message);
     }
 
     console.log('========== FIN CREAR RESERVA ==========');
 
-    // ── 5. Generar WhatsApp deep link ───────────────────────────────────
-    const whatsappDeepLink = `https://wa.me/521${req.user.telefono}?text=Hola ${encodeURIComponent(req.user.nombreCompleto)}, tu cita para ${serviceDurations[servicio].nombre} el ${fecha} a las ${horaInicio} ha sido confirmada. ¿Deseas cancelar? Responde Sí o No.`;
-
     res.status(201).json({
       ...reservation.toObject(),
-      whatsappDeepLink,
       calendarEventId,
-      message: 'Reserva creada exitosamente. Se ha enviado confirmación por WhatsApp.'
+      whatsappEnviado,
+      salonNotificado,
+      whatsappError,
+      message: whatsappEnviado 
+        ? '✅ Cita creada y confirmación enviada por WhatsApp' 
+        : '✅ Cita creada. Hubo un error enviando WhatsApp, pero la cita está confirmada.'
     });
 
   } catch (error) {
@@ -168,31 +176,108 @@ export const getWeekAvailability = async (req, res) => {
     fechaFinDate.setUTCDate(fechaFinDate.getUTCDate() + 6);
     const fechaFin = `${fechaFinDate.getUTCFullYear()}-${String(fechaFinDate.getUTCMonth() + 1).padStart(2, '0')}-${String(fechaFinDate.getUTCDate()).padStart(2, '0')}`;
 
+    // Buscar TODAS las reservas confirmadas en esa semana
     const reservas = await Reservation.find({
       fecha: { $gte: fechaInicio, $lte: fechaFin },
       estado: 'confirmada'
     }).sort({ fecha: 1, horaInicio: 1 });
 
-    console.log(`📊 Disponibilidad semanal: ${reservas.length} reservas confirmadas`);
+    console.log(`📊 Disponibilidad semanal: ${reservas.length} reservas confirmadas para todos los usuarios`);
     
-    // Formatear respuesta
+    // Formatear respuesta con información detallada
     const disponibilidad = reservas.map(reserva => ({
       _id: reserva._id,
       servicio: reserva.servicio,
       nombreCliente: reserva.nombreCliente,
+      telefonoCliente: reserva.telefonoCliente,
       fecha: reserva.fecha,
       horaInicio: reserva.horaInicio,
       horaFin: reserva.horaFin,
       duracion: reserva.duracion,
+      precio: reserva.precio,
+      estado: reserva.estado,
       servicioNombre: serviceDurations[reserva.servicio]?.nombre,
-      googleCalendarEventId: reserva.googleCalendarEventId
+      googleCalendarEventId: reserva.googleCalendarEventId,
+      // Información para mostrar en calendario
+      ocupado: true, // Siempre true porque son reservas confirmadas
+      color: '#D98FA0', // Color rosa para ocupado
+      tooltip: `${serviceDurations[reserva.servicio]?.nombre} - ${reserva.nombreCliente}`
     }));
 
-    res.json(disponibilidad);
+    // También incluir horarios ocupados por franjas
+    const horariosOcupados = [];
+    reservas.forEach(reserva => {
+      const horasOcupadas = calcularHorasOcupadas(reserva.horaInicio, reserva.horaFin);
+      horasOcupadas.forEach(hora => {
+        horariosOcupados.push({
+          fecha: reserva.fecha,
+          hora: hora,
+          reservaId: reserva._id
+        });
+      });
+    });
+
+    res.json({
+      reservas: disponibilidad,
+      horariosOcupados: horariosOcupados,
+      totalReservas: reservas.length
+    });
 
   } catch (error) {
     console.error('❌ ERROR:', error);
     res.status(500).json({ message: 'Error al obtener disponibilidad', error: error.message });
+  }
+};
+
+// Helper para calcular horas ocupadas
+const calcularHorasOcupadas = (horaInicio, horaFin) => {
+  const horasOcupadas = [];
+  const [horaInicioNum, minutoInicio] = horaInicio.split(':').map(Number);
+  const [horaFinNum, minutoFin] = horaFin.split(':').map(Number);
+  
+  const inicioMinutos = horaInicioNum * 60 + minutoInicio;
+  const finMinutos = horaFinNum * 60 + minutoFin;
+  
+  for (let minutos = inicioMinutos; minutos < finMinutos; minutos += 30) {
+    const h = Math.floor(minutos / 60);
+    const m = minutos % 60;
+    horasOcupadas.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+  }
+  
+  return horasOcupadas;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VERIFICAR HORARIO OCUPADO (nueva función)
+// ═══════════════════════════════════════════════════════════════════════════
+export const checkTimeSlot = async (req, res) => {
+  try {
+    const { fecha, horaInicio, servicio } = req.body;
+    
+    if (!fecha || !horaInicio) {
+      return res.status(400).json({ message: 'Fecha y hora son requeridas' });
+    }
+    
+    let duracion = 60; // Default
+    if (servicio && serviceDurations[servicio]) {
+      duracion = serviceDurations[servicio].duracion;
+    }
+    
+    const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
+    
+    res.json({
+      disponible,
+      mensaje: disponible 
+        ? 'Horario disponible' 
+        : 'Horario ocupado',
+      fecha,
+      horaInicio,
+      duracion
+    });
+    
+  } catch (error) {
+    console.error('❌ ERROR verificando horario:', error);
+    res.status(500).json({ message: 'Error verificando horario', error: error.message });
   }
 };
 
@@ -353,53 +438,46 @@ export const deleteReservation = async (req, res) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SINCORNIZAR CON GOOGLE CALENDAR (para administración)
+// OBTENER TODAS LAS RESERVAS (para admin/calendario)
 // ═══════════════════════════════════════════════════════════════════════════
-export const syncWithGoogleCalendar = async (req, res) => {
+export const getAllReservations = async (req, res) => {
   try {
-    console.log('🔄 ========== SINCORNIZAR CON GOOGLE CALENDAR ==========');
+    console.log('📊 Obteniendo todas las reservas confirmadas...');
     
-    const reservasSinEvento = await Reservation.find({
-      estado: 'confirmada',
-      googleCalendarEventId: { $in: [null, ''] }
-    });
-
-    console.log(`📊 ${reservasSinEvento.length} reservas sin evento en Google Calendar`);
-
-    let creados = 0;
-    let errores = 0;
-
-    for (const reserva of reservasSinEvento) {
-      try {
-        const resultado = await crearEventoCalendar(reserva);
-        if (resultado.success) {
-          reserva.googleCalendarEventId = resultado.eventId;
-          await reserva.save();
-          creados++;
-          console.log(`✅ Evento creado para reserva ${reserva._id}`);
-        } else {
-          errores++;
-          console.error(`❌ Error creando evento para reserva ${reserva._id}:`, resultado.error);
-        }
-      } catch (error) {
-        errores++;
-        console.error(`❌ Error sincronizando reserva ${reserva._id}:`, error.message);
+    const reservations = await Reservation.find({
+      estado: 'confirmada'
+    }).sort({ fecha: 1, horaInicio: 1 });
+    
+    console.log(`✅ ${reservations.length} reservas confirmadas encontradas`);
+    
+    // Formatear para calendario
+    const formateadas = reservations.map(reserva => ({
+      id: reserva._id,
+      title: `${serviceDurations[reserva.servicio]?.nombre} - ${reserva.nombreCliente}`,
+      start: `${reserva.fecha}T${reserva.horaInicio}:00`,
+      end: `${reserva.fecha}T${reserva.horaFin}:00`,
+      color: '#D98FA0', // Rosa
+      extendedProps: {
+        servicio: reserva.servicio,
+        nombreCliente: reserva.nombreCliente,
+        telefonoCliente: reserva.telefonoCliente,
+        servicioNombre: serviceDurations[reserva.servicio]?.nombre,
+        precio: reserva.precio
       }
-    }
-
-    console.log('🔄 Sincronización completada');
-    console.log(`✅ Creados: ${creados}`);
-    console.log(`❌ Errores: ${errores}`);
-
+    }));
+    
     res.json({
-      message: 'Sincronización completada',
-      total: reservasSinEvento.length,
-      creados,
-      errores
+      success: true,
+      count: reservations.length,
+      reservas: formateadas
     });
-
+    
   } catch (error) {
-    console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error en sincronización', error: error.message });
+    console.error('❌ ERROR obteniendo todas las reservas:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al obtener reservas', 
+      error: error.message 
+    });
   }
 };

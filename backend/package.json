@@ -16,7 +16,8 @@
     "reservations",
     "google-calendar",
     "whatsapp",
-    "whapi"
+    "whapi",
+    "realtime"
   ],
   "author": "Soumaya Beauty Bar",
   "license": "MIT",
@@ -29,7 +30,8 @@
     "cors": "^2.8.5",
     "axios": "^1.6.2",
     "googleapis": "^128.0.0",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "socket.io": "^4.7.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

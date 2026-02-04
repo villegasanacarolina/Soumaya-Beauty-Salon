@@ -6,10 +6,10 @@ const Home = () => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
   const heroImages = [
-    '/images/home/hero1.jpg',
-    '/images/home/hero2.jpg',
-    '/images/home/hero3.jpg',
-    '/images/home/hero4.jpg'
+    '/images/home/hero-1.jpg',
+    '/images/home/hero-2.jpg',
+    '/images/home/hero-3.jpg',
+    '/images/home/hero-4.jpg'
   ];
 
   const services = [

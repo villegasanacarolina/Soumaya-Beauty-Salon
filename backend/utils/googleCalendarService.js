@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 
-// Obtener autenticación
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTENTICACIÓN DE GOOGLE
+// ═══════════════════════════════════════════════════════════════════════════
 const getGoogleAuth = () => {
   try {
     console.log('🔐 Obteniendo autenticación Google...');
@@ -26,7 +28,9 @@ const getGoogleAuth = () => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // CREAR EVENTO EN GOOGLE CALENDAR
+// ═══════════════════════════════════════════════════════════════════════════
 export const crearEventoCalendar = async (reserva) => {
   try {
     console.log('📅 ========== CREANDO EVENTO EN GOOGLE CALENDAR ==========');
@@ -40,7 +44,7 @@ export const crearEventoCalendar = async (reserva) => {
     const auth = getGoogleAuth();
     const calendar = google.calendar({ version: 'v3', auth });
     
-    // Usar calendario principal
+    // Usar calendario principal o el configurado
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
     console.log('📅 Calendar ID:', calendarId);
     
@@ -102,7 +106,7 @@ Creado automáticamente por el sistema de reservas.`;
           { method: 'popup', minutes: 30 }
         ]
       },
-      colorId: '11', // Color rosa (#D98FA0 similar)
+      colorId: '11', // Color rosa
       guestsCanInviteOthers: false,
       guestsCanModify: false,
       guestsCanSeeOtherGuests: false
@@ -159,7 +163,9 @@ Creado automáticamente por el sistema de reservas.`;
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // ELIMINAR EVENTO DE GOOGLE CALENDAR
+// ═══════════════════════════════════════════════════════════════════════════
 export const eliminarEventoCalendar = async (eventId) => {
   try {
     if (!eventId) {
@@ -199,7 +205,9 @@ export const eliminarEventoCalendar = async (eventId) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // VERIFICAR CONEXIÓN CON GOOGLE CALENDAR
+// ═══════════════════════════════════════════════════════════════════════════
 export const verificarConexionCalendar = async () => {
   try {
     console.log('🔍 Verificando conexión con Google Calendar...');
@@ -238,7 +246,61 @@ export const verificarConexionCalendar = async () => {
   }
 };
 
-// OBTENER EVENTOS DE UNA FECHA
+// ═══════════════════════════════════════════════════════════════════════════
+// OBTENER TODOS LOS EVENTOS DEL CALENDARIO (próximos 30 días)
+// ═══════════════════════════════════════════════════════════════════════════
+export const obtenerEventosCalendar = async () => {
+  try {
+    console.log('📅 Obteniendo eventos de Google Calendar...');
+    
+    const auth = getGoogleAuth();
+    const calendar = google.calendar({ version: 'v3', auth });
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+    
+    // Obtener eventos de los próximos 30 días
+    const now = new Date();
+    const futuro = new Date();
+    futuro.setDate(futuro.getDate() + 30);
+    
+    const response = await calendar.events.list({
+      calendarId: calendarId,
+      timeMin: now.toISOString(),
+      timeMax: futuro.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100
+    });
+    
+    const eventos = response.data.items || [];
+    
+    console.log(`📅 ${eventos.length} eventos encontrados en Google Calendar`);
+    
+    return {
+      success: true,
+      eventos: eventos.map(evento => ({
+        id: evento.id,
+        summary: evento.summary,
+        description: evento.description,
+        start: evento.start?.dateTime || evento.start?.date,
+        end: evento.end?.dateTime || evento.end?.date,
+        created: evento.created,
+        location: evento.location
+      }))
+    };
+    
+  } catch (error) {
+    console.error('❌ ERROR obteniendo eventos:', error.message);
+    return {
+      success: false,
+      error: error.message,
+      eventos: []
+    };
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OBTENER EVENTOS POR FECHA ESPECÍFICA
+// ═══════════════════════════════════════════════════════════════════════════
 export const obtenerEventosPorFecha = async (fecha) => {
   try {
     const auth = getGoogleAuth();
@@ -278,5 +340,37 @@ export const obtenerEventosPorFecha = async (fecha) => {
       success: false,
       error: error.message
     };
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VERIFICAR SI UN EVENTO EXISTE
+// ═══════════════════════════════════════════════════════════════════════════
+export const verificarEventoExiste = async (eventId) => {
+  try {
+    if (!eventId) {
+      return { exists: false };
+    }
+    
+    const auth = getGoogleAuth();
+    const calendar = google.calendar({ version: 'v3', auth });
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+    
+    const response = await calendar.events.get({
+      calendarId: calendarId,
+      eventId: eventId
+    });
+    
+    return {
+      exists: true,
+      evento: response.data
+    };
+    
+  } catch (error) {
+    if (error.code === 404) {
+      return { exists: false };
+    }
+    console.error('❌ ERROR verificando evento:', error.message);
+    return { exists: false, error: error.message };
   }
 };

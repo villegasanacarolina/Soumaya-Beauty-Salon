@@ -4,15 +4,14 @@ import cors from 'cors';
 import connectDB from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import reservationRoutes from './routes/reservationRoutes.js';
-import cancelRoutes from './routes/cancelRoutes.js';
-import whatsappRoutes from './routes/whatsappRoutes.js';
+import whapiRoutes from './routes/whapiRoutes.js';
 import cron from 'node-cron';
 import { enviarRecordatoriosDiarios } from './utils/cronJobs.js';
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5002;
+const PORT = process.env.PORT || 5000;
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 app.use(cors());
@@ -25,8 +24,7 @@ connectDB();
 // ─── Rutas ──────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 app.use('/api/reservations', reservationRoutes);
-app.use('/api/cancel', cancelRoutes);           // link de cancelación (fallback)
-app.use('/api/whatsapp', whatsappRoutes);       // webhook de WhatsApp + Google Calendar
+app.use('/api/whapi', whapiRoutes);
 
 // ─── Ruta de prueba ─────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -34,16 +32,18 @@ app.get('/', (req, res) => {
     message: 'Soumaya Beauty Bar API',
     status: 'running',
     mongodb: 'connected',
-    whatsapp: 'Twilio WhatsApp Sandbox',
+    whatsapp: 'Whapi.cloud',
     calendar: 'Google Calendar API',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString()
   });
 });
 
-// ─── Cron Job – Recordatorios diarios a las 9 AM ───────────────────────────
-cron.schedule('0 9 * * *', () => {
-  console.log('⏰ Ejecutando envío de recordatorios...');
+// ─── Cron Job – Recordatorios diarios a las 6:30 PM ───────────────────────────
+// Formato: minutos horas * * *
+// 30 18 = 6:30 PM (18:30)
+cron.schedule('30 18 * * *', () => {
+  console.log('⏰ Ejecutando envío de recordatorios (6:30 PM)...');
   enviarRecordatoriosDiarios();
 }, {
   timezone: 'America/Mexico_City'
@@ -65,10 +65,10 @@ app.listen(PORT, () => {
   console.log(`📍 Puerto: ${PORT}`);
   console.log(`🌍 Entorno: ${process.env.NODE_ENV || 'development'}`);
   console.log(`💾 MongoDB: Conectado`);
-  console.log(`📱 WhatsApp: Twilio Sandbox`);
+  console.log(`📱 WhatsApp: Whapi.cloud`);
   console.log(`📅 Google Calendar: Service Account`);
-  console.log(`🔗 Cancel link: /api/cancel/:id`);
-  console.log(`📨 WhatsApp webhook: /api/whatsapp/webhook`);
+  console.log(`⏰ Cron: Recordatorios a las 6:30 PM`);
+  console.log(`📨 Whapi webhook: /api/whapi/webhook`);
   console.log('==========================================');
   console.log('');
 });

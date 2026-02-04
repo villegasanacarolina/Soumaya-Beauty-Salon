@@ -38,7 +38,7 @@ const reservationSchema = new mongoose.Schema(
     },
     precio: {
       type: Number,
-      required: true  // ← NUEVO: Precio del servicio en MXN
+      required: true  // precio en MXN
     },
     estado: {
       type: String,
@@ -47,41 +47,20 @@ const reservationSchema = new mongoose.Schema(
     },
 
     // ─── Google Calendar ────────────────────────────────────────────────
-    // ID del evento en Google Calendar para poder eliminarlo al cancelar
     googleCalendarEventId: {
       type: String,
       default: null
     },
 
-    // ─── WhatsApp / Encuesta ────────────────────────────────────────────
-    // Estado de la encuesta WhatsApp:
-    //   'pendiente_conexion'              → se generó el deep link, esperando que la clienta se conecte
-    //   'encuesta_cancelacion_pendiente'  → confirmación enviada, esperando Sí/No de cancelar
-    //   'encuesta_reagendar_pendiente'    → cita cancelada, esperando Sí/No de reagendar
-    //   'completada'                      → encuesta finalizada
-    //   null                              → no aplica (reservas antiguas)
-    estadoEncuesta: {
-      type: String,
-      default: null,
-      enum: [
-        'pendiente_conexion',
-        'encuesta_cancelacion_pendiente',
-        'encuesta_reagendar_pendiente',
-        'completada',
-        null
-      ]
-    },
-
-    // Token de respaldo para cancelación por link (mantiene compatibilidad)
-    cancelToken: {
-      type: String,
-      default: null
-    },
-    
-    // Campo para marcar si ya se envió recordatorio
+    // ─── WhatsApp (Whapi.cloud) ─────────────────────────────────────────
     recordatorioEnviado: {
       type: Boolean,
       default: false
+    },
+    
+    esperandoRespuesta: {
+      type: Boolean,
+      default: false  // true = esperando respuesta Sí/No a cancelación
     }
   },
   {
@@ -89,8 +68,9 @@ const reservationSchema = new mongoose.Schema(
   }
 );
 
-// Índice compuesto para búsqueda rápida por teléfono + estado de encuesta
-reservationSchema.index({ telefonoCliente: 1, estadoEncuesta: 1, estado: 1 });
+// Índices para búsquedas rápidas
+reservationSchema.index({ telefonoCliente: 1, estado: 1, esperandoRespuesta: 1 });
+reservationSchema.index({ fecha: 1, estado: 1 });
 
 const Reservation = mongoose.model('Reservation', reservationSchema);
 

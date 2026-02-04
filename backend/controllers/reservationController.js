@@ -1,6 +1,12 @@
 import crypto from 'crypto';
 import Reservation from '../models/Reservation.js';
-import { enviarConfirmacionWhatsApp, generarWhatsappDeepLink, notificarSalon, serviceDurations } from '../utils/whatsappService.js';
+import {
+  enviarConfirmacionCita,
+  notificarSalonNuevaCita,
+  notificarSalonCancelacion,
+  enviarMensajeCancelacionConfirmada,
+  serviceDurations
+} from '../utils/whapiService.js';
 import { crearEventoCalendar, eliminarEventoCalendar } from '../utils/googleCalendarService.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,16 +35,9 @@ const verificarDisponibilidad = async (fecha, horaInicio, duracion) => {
   return reservasExistentes.length === 0;
 };
 
-// ─── Crear reserva ────────────────────────────────────────────────────────────
-// FLUJO COMPLETO:
-// 1. Validar datos y crear reserva en MongoDB
-// 2. Crear evento en Google Calendar → guardar eventId en la reserva
-// 3. Generar deep link de WhatsApp y retornarlo al frontend
-// 4. El frontend abre el deep link (abre WhatsApp prellenado con "join <keyword>")
-// 5. Cuando la clienta envía "join", Twilio llama al webhook
-// 6. El webhook detecta la reserva con estadoEncuesta='pendiente_conexion'
-//    y envía el WhatsApp de confirmación + encuesta
-
+// ═══════════════════════════════════════════════════════════════════════════
+// CREAR RESERVA
+// ═══════════════════════════════════════════════════════════════════════════
 export const createReservation = async (req, res) => {
   try {
     const { servicio, fecha, horaInicio } = req.body;
@@ -50,7 +49,7 @@ export const createReservation = async (req, res) => {
     console.log('Fecha:', fecha);
     console.log('Hora:', horaInicio);
 
-    // ── Validaciones ────────────────────────────────────────────────────
+    // Validaciones
     if (!serviceDurations[servicio]) {
       return res.status(400).json({ message: 'Servicio inválido' });
     }
@@ -61,6 +60,7 @@ export const createReservation = async (req, res) => {
 
     const duracion = serviceDurations[servicio].duracion;
     const horaFin  = calcularHoraFin(horaInicio, duracion);
+    const precio   = serviceDurations[servicio].precio;
 
     const [horaInicioNum] = horaInicio.split(':').map(Number);
     const [horaFinNum]    = horaFin.split(':').map(Number);
@@ -77,8 +77,6 @@ export const createReservation = async (req, res) => {
     }
 
     // ── 1. Crear reserva en MongoDB ─────────────────────────────────────
-    const cancelToken = crypto.randomBytes(32).toString('hex');
-
     const reservation = await Reservation.create({
       usuario:         req.user._id,
       nombreCliente:   req.user.nombreCompleto,
@@ -88,11 +86,10 @@ export const createReservation = async (req, res) => {
       horaInicio,
       horaFin,
       duracion,
+      precio,
       estado:          'confirmada',
-      cancelToken,
-      // La clienta aún no se ha conectado al WhatsApp sandbox
-      estadoEncuesta:  'pendiente_conexion',
-      precio:          serviceDurations[servicio].precio
+      esperandoRespuesta: false,  // Se activará cuando envíe confirmación
+      recordatorioEnviado: false
     });
 
     console.log('✅ RESERVA CREADA:', reservation._id);
@@ -109,25 +106,30 @@ export const createReservation = async (req, res) => {
       console.error('⚠️ Error con Google Calendar:', e.message);
     }
 
-    // ── 3. Notificar al salón por WhatsApp ──────────────────────────────
+    // ── 3. Enviar WhatsApp de confirmación al cliente ───────────────────
     try {
-      await notificarSalon(reservation);
+      const resultadoConfirmacion = await enviarConfirmacionCita(reservation);
+      if (resultadoConfirmacion.success) {
+        // Marcar que está esperando respuesta
+        reservation.esperandoRespuesta = true;
+        await reservation.save();
+        console.log('✅ WhatsApp de confirmación enviado al cliente');
+      }
+    } catch (e) {
+      console.error('⚠️ Error enviando confirmación:', e.message);
+    }
+
+    // ── 4. Notificar al salón ───────────────────────────────────────────
+    try {
+      await notificarSalonNuevaCita(reservation);
+      console.log('✅ Salón notificado');
     } catch (e) {
       console.error('⚠️ Error notificando salón:', e.message);
     }
 
-    // ── 4. Generar deep link de WhatsApp ────────────────────────────────
-    // Este link se retorna al frontend para que lo abra automáticamente
-    const whatsappDeepLink = generarWhatsappDeepLink();
-
-    console.log('📲 Deep link WhatsApp generado');
     console.log('========== FIN CREAR RESERVA ==========');
 
-    // Retornar la reserva + el deep link para que el frontend lo abra
-    res.status(201).json({
-      ...reservation.toObject(),
-      whatsappDeepLink  // El frontend debe abrir este link inmediatamente
-    });
+    res.status(201).json(reservation.toObject());
 
   } catch (error) {
     console.error('❌ ERROR:', error);
@@ -138,8 +140,9 @@ export const createReservation = async (req, res) => {
   }
 };
 
-// ─── Disponibilidad semanal ───────────────────────────────────────────────────
-
+// ═══════════════════════════════════════════════════════════════════════════
+// DISPONIBILIDAD SEMANAL
+// ═══════════════════════════════════════════════════════════════════════════
 export const getWeekAvailability = async (req, res) => {
   try {
     const { fecha } = req.params;
@@ -171,8 +174,9 @@ export const getWeekAvailability = async (req, res) => {
   }
 };
 
-// ─── Reservas del usuario ─────────────────────────────────────────────────────
-
+// ═══════════════════════════════════════════════════════════════════════════
+// RESERVAS DEL USUARIO
+// ═══════════════════════════════════════════════════════════════════════════
 export const getUserReservations = async (req, res) => {
   try {
     const reservations = await Reservation.find({
@@ -210,12 +214,12 @@ export const getUserReservations = async (req, res) => {
   }
 };
 
-// ─── Cancelar reserva (desde la página web) ──────────────────────────────────
-// Cancela en MongoDB Y elimina el evento de Google Calendar
-
+// ═══════════════════════════════════════════════════════════════════════════
+// CANCELAR RESERVA (desde web)
+// ═══════════════════════════════════════════════════════════════════════════
 export const cancelReservation = async (req, res) => {
   try {
-    console.log('❌ ========== CANCELAR RESERVA (desde página) ==========');
+    console.log('❌ ========== CANCELAR RESERVA ==========');
     console.log('ID:', req.params.id);
 
     const reservation = await Reservation.findById(req.params.id);
@@ -229,9 +233,8 @@ export const cancelReservation = async (req, res) => {
     }
 
     // Cancelar en MongoDB
-    reservation.estado         = 'cancelada';
-    reservation.cancelToken    = null;
-    reservation.estadoEncuesta = 'completada';
+    reservation.estado = 'cancelada';
+    reservation.esperandoRespuesta = false;
     await reservation.save();
 
     // Eliminar de Google Calendar
@@ -242,6 +245,14 @@ export const cancelReservation = async (req, res) => {
       } catch (e) {
         console.error('⚠️ Error eliminando de Google Calendar:', e.message);
       }
+    }
+
+    // Notificar al salón
+    try {
+      await notificarSalonCancelacion(reservation);
+      console.log('✅ Salón notificado');
+    } catch (e) {
+      console.error('⚠️ Error notificando salón:', e.message);
     }
 
     console.log('✅ Reserva cancelada:', reservation._id);
@@ -261,8 +272,9 @@ export const cancelReservation = async (req, res) => {
   }
 };
 
-// ─── Eliminar reserva del historial ───────────────────────────────────────────
-
+// ═══════════════════════════════════════════════════════════════════════════
+// ELIMINAR RESERVA DEL HISTORIAL
+// ═══════════════════════════════════════════════════════════════════════════
 export const deleteReservation = async (req, res) => {
   try {
     const reservation = await Reservation.findById(req.params.id);

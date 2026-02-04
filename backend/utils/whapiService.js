@@ -62,6 +62,10 @@ const enviarMensajeWhapi = async (telefono, mensaje) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// FUNCIONES EXPORTADAS
+// ═══════════════════════════════════════════════════════════════════════════
+
 // ─── WhatsApp: Notificación de nueva cita al salón ────────────────────────
 export const notificarSalonNuevaCita = async (reserva) => {
   try {
@@ -171,10 +175,15 @@ export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fech
   }
 };
 
-// ─── WhatsApp: Confirmación de cancelación ────────────────────────────────
-export const enviarConfirmacionCancelacion = async (reserva) => {
+// ─── WhatsApp: Confirmación de cancelación (ESTA FALTABA) ─────────────────
+export const enviarMensajeCancelacionConfirmada = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${reserva.servicio}`);
+    }
+    
     const fecha = formatearFecha(reserva.fecha);
     const frontendUrl = process.env.FRONTEND_URL || 'https://soumaya-beauty-salon.vercel.app';
 
@@ -186,7 +195,13 @@ export const enviarConfirmacionCancelacion = async (reserva) => {
       `Visita: ${frontendUrl}/reservaciones\n\n` +
       `Soumaya Beauty Bar 🌸`;
 
-    return await enviarMensajeWhapi(reserva.telefonoCliente, mensaje);
+    const resultado = await enviarMensajeWhapi(reserva.telefonoCliente, mensaje);
+    
+    if (resultado.success) {
+      console.log('✅ Confirmación de cancelación enviada');
+    }
+    
+    return resultado;
   } catch (error) {
     console.error('❌ Error enviando confirmación de cancelación:', error.message);
     return { success: false, error: error.message };
@@ -197,6 +212,11 @@ export const enviarConfirmacionCancelacion = async (reserva) => {
 export const notificarSalonCancelacion = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
+    
+    if (!info) {
+      throw new Error(`Servicio no encontrado: ${reserva.servicio}`);
+    }
+    
     const fecha = formatearFecha(reserva.fecha);
     const salonPhone = process.env.SALON_PHONE_NUMBER || '3511270276';
 
@@ -210,7 +230,13 @@ export const notificarSalonCancelacion = async (reserva) => {
       `El cliente canceló desde WhatsApp.\n` +
       `📎 Evento eliminado de Google Calendar ✅`;
 
-    return await enviarMensajeWhapi(salonPhone, mensaje);
+    const resultado = await enviarMensajeWhapi(salonPhone, mensaje);
+    
+    if (resultado.success) {
+      console.log('✅ Salón notificado de cancelación');
+    }
+    
+    return resultado;
   } catch (error) {
     console.error('❌ Error notificando cancelación al salón:', error.message);
     return { success: false, error: error.message };

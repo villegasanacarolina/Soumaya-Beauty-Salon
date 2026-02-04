@@ -1,29 +1,61 @@
 import { google } from 'googleapis';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AUTENTICACIÓN DE GOOGLE
+// CONFIGURACIÓN Y AUTENTICACIÓN
 // ═══════════════════════════════════════════════════════════════════════════
+
+let authClient = null;
+
 const getGoogleAuth = () => {
   try {
+    // Si ya tenemos un cliente autenticado, reutilizarlo
+    if (authClient) {
+      return authClient;
+    }
+    
     console.log('🔐 Obteniendo autenticación Google...');
+    
     const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     
     if (!serviceAccountJson) {
-      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON no configurada');
+      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON no está configurada');
+      console.error('');
+      console.error('📋 Para configurarla:');
+      console.error('   1. Ve a Google Cloud Console → IAM → Cuentas de servicio');
+      console.error('   2. Crea/usa una cuenta de servicio');
+      console.error('   3. Genera una clave JSON');
+      console.error('   4. Configura la variable de entorno con el contenido del JSON');
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON no configurada');
     }
     
-    const credentials = JSON.parse(serviceAccountJson);
+    // Verificar que el JSON sea válido
+    let credentials;
+    try {
+      credentials = JSON.parse(serviceAccountJson);
+    } catch (parseError) {
+      console.error('❌ El JSON de la cuenta de servicio es inválido');
+      console.error('   Error:', parseError.message);
+      throw new Error('JSON de cuenta de servicio inválido');
+    }
     
-    const auth = new google.auth.GoogleAuth({
+    // Verificar campos requeridos
+    if (!credentials.client_email || !credentials.private_key) {
+      console.error('❌ El JSON no contiene client_email o private_key');
+      throw new Error('JSON de cuenta de servicio incompleto');
+    }
+    
+    console.log(`📧 Cuenta de servicio: ${credentials.client_email}`);
+    
+    authClient = new google.auth.GoogleAuth({
       credentials: credentials,
       scopes: ['https://www.googleapis.com/auth/calendar']
     });
     
     console.log('✅ Autenticación Google obtenida');
-    return auth;
+    return authClient;
+    
   } catch (error) {
-    console.error('❌ ERROR autenticación Google:', error.message);
+    console.error('❌ ERROR en autenticación Google:', error.message);
     throw error;
   }
 };
@@ -31,9 +63,13 @@ const getGoogleAuth = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // CREAR EVENTO EN GOOGLE CALENDAR
 // ═══════════════════════════════════════════════════════════════════════════
+
 export const crearEventoCalendar = async (reserva) => {
   try {
-    console.log('📅 ========== CREANDO EVENTO EN GOOGLE CALENDAR ==========');
+    console.log('');
+    console.log('📅 ═══════════════════════════════════════════════════════');
+    console.log('📅 CREANDO EVENTO EN GOOGLE CALENDAR');
+    console.log('📅 ═══════════════════════════════════════════════════════');
     console.log('🆔 ID Reserva:', reserva._id);
     console.log('👤 Cliente:', reserva.nombreCliente);
     console.log('📱 Teléfono:', reserva.telefonoCliente);
@@ -41,14 +77,15 @@ export const crearEventoCalendar = async (reserva) => {
     console.log('📅 Fecha:', reserva.fecha);
     console.log('⏰ Hora:', `${reserva.horaInicio} - ${reserva.horaFin}`);
     
+    // Obtener autenticación
     const auth = getGoogleAuth();
     const calendar = google.calendar({ version: 'v3', auth });
     
-    // Usar calendario principal o el configurado
+    // Obtener ID del calendario
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
     console.log('📅 Calendar ID:', calendarId);
     
-    // Mapeo de servicios
+    // Mapeo de servicios a nombres legibles
     const serviciosNombres = {
       'unas-gel': 'Uñas de Gel',
       'unas-acrilicas': 'Uñas Acrílicas',
@@ -60,15 +97,14 @@ export const crearEventoCalendar = async (reserva) => {
     };
     
     const servicioNombre = serviciosNombres[reserva.servicio] || reserva.servicio;
-    console.log('💅 Nombre del servicio:', servicioNombre);
     
-    // Formatear fechas para Google Calendar (IMPORTANTE: timezone)
+    // Formatear fechas para Google Calendar
+    // IMPORTANTE: Usar el formato correcto con timezone
     const startDateTime = `${reserva.fecha}T${reserva.horaInicio}:00`;
     const endDateTime = `${reserva.fecha}T${reserva.horaFin}:00`;
     
-    console.log('⏰ Start DateTime:', startDateTime);
-    console.log('⏰ End DateTime:', endDateTime);
-    console.log('🌎 Timezone:', 'America/Mexico_City');
+    console.log('⏰ Start:', startDateTime);
+    console.log('⏰ End:', endDateTime);
     
     // Crear descripción detallada
     const description = `💅 SERVICIO: ${servicioNombre}
@@ -84,9 +120,7 @@ export const crearEventoCalendar = async (reserva) => {
 ---
 Creado automáticamente por el sistema de reservas.`;
     
-    console.log('📝 Descripción creada');
-    
-    // Configurar evento
+    // Configurar el evento
     const event = {
       summary: `🌸 ${servicioNombre} - ${reserva.nombreCliente}`,
       description: description,
@@ -106,28 +140,26 @@ Creado automáticamente por el sistema de reservas.`;
           { method: 'popup', minutes: 30 }
         ]
       },
-      colorId: '11', // Color rosa
-      guestsCanInviteOthers: false,
-      guestsCanModify: false,
-      guestsCanSeeOtherGuests: false
+      colorId: '11'
     };
     
-    console.log('📋 Evento configurado, insertando en Google Calendar...');
+    console.log('📋 Insertando evento...');
     
-    // Insertar evento
+    // Insertar el evento
     const result = await calendar.events.insert({
       calendarId: calendarId,
       resource: event,
       sendUpdates: 'none'
     });
     
-    console.log('✅ ========== EVENTO CREADO EXITOSAMENTE ==========');
+    console.log('');
+    console.log('✅ ═══════════════════════════════════════════════════════');
+    console.log('✅ EVENTO CREADO EXITOSAMENTE');
+    console.log('✅ ═══════════════════════════════════════════════════════');
     console.log('🆔 Event ID:', result.data.id);
-    console.log('🔗 Enlace:', result.data.htmlLink);
+    console.log('🔗 Link:', result.data.htmlLink);
     console.log('📅 Título:', result.data.summary);
-    console.log('⏰ Inicio:', result.data.start.dateTime);
-    console.log('⏰ Fin:', result.data.end.dateTime);
-    console.log('====================================================');
+    console.log('');
     
     return {
       success: true,
@@ -136,28 +168,58 @@ Creado automáticamente por el sistema de reservas.`;
       data: {
         summary: result.data.summary,
         start: result.data.start.dateTime,
-        end: result.data.end.dateTime,
-        description: result.data.description
+        end: result.data.end.dateTime
       }
     };
     
   } catch (error) {
-    console.error('❌ ========== ERROR CREANDO EVENTO GOOGLE CALENDAR ==========');
-    console.error('📌 Tipo de error:', error.name);
+    console.error('');
+    console.error('❌ ═══════════════════════════════════════════════════════');
+    console.error('❌ ERROR CREANDO EVENTO EN GOOGLE CALENDAR');
+    console.error('❌ ═══════════════════════════════════════════════════════');
+    console.error('📌 Tipo:', error.name);
     console.error('📌 Mensaje:', error.message);
     console.error('📌 Código:', error.code);
     
-    if (error.response) {
-      console.error('📌 Status:', error.response.status);
-      console.error('📌 Data:', JSON.stringify(error.response.data, null, 2));
+    // Errores específicos de Google Calendar
+    if (error.code === 401) {
+      console.error('');
+      console.error('📋 ERROR 401 - No autenticado');
+      console.error('   El JSON de la cuenta de servicio es inválido o ha expirado.');
+      console.error('   Genera una nueva clave en Google Cloud Console.');
     }
     
-    console.error('❌ Stack trace:', error.stack);
-    console.error('=============================================================');
+    if (error.code === 403) {
+      console.error('');
+      console.error('📋 ERROR 403 - Sin permisos');
+      console.error('   La cuenta de servicio no tiene acceso al calendario.');
+      console.error('   SOLUCIÓN:');
+      console.error('   1. Abre Google Calendar en el navegador');
+      console.error('   2. Ve a Configuración del calendario');
+      console.error('   3. Busca "Compartir con personas específicas"');
+      console.error('   4. Agrega el email de la cuenta de servicio');
+      console.error('   5. Selecciona "Hacer cambios en eventos"');
+    }
+    
+    if (error.code === 404) {
+      console.error('');
+      console.error('📋 ERROR 404 - Calendario no encontrado');
+      console.error('   El GOOGLE_CALENDAR_ID es incorrecto.');
+      console.error('   Usa "primary" o el ID correcto de tu calendario.');
+    }
+    
+    if (error.response?.data) {
+      console.error('');
+      console.error('📋 Respuesta de Google:');
+      console.error(JSON.stringify(error.response.data, null, 2));
+    }
+    
+    console.error('');
     
     return {
       success: false,
       error: error.message,
+      code: error.code,
       details: error.response?.data || null
     };
   }
@@ -166,6 +228,7 @@ Creado automáticamente por el sistema de reservas.`;
 // ═══════════════════════════════════════════════════════════════════════════
 // ELIMINAR EVENTO DE GOOGLE CALENDAR
 // ═══════════════════════════════════════════════════════════════════════════
+
 export const eliminarEventoCalendar = async (eventId) => {
   try {
     if (!eventId) {
@@ -173,8 +236,7 @@ export const eliminarEventoCalendar = async (eventId) => {
       return { success: false, error: 'No eventId' };
     }
     
-    console.log('🗑️ ========== ELIMINANDO EVENTO DE GOOGLE CALENDAR ==========');
-    console.log('🆔 Event ID:', eventId);
+    console.log('🗑️ Eliminando evento de Google Calendar:', eventId);
     
     const auth = getGoogleAuth();
     const calendar = google.calendar({ version: 'v3', auth });
@@ -185,16 +247,15 @@ export const eliminarEventoCalendar = async (eventId) => {
       eventId: eventId
     });
     
-    console.log('✅ Evento eliminado de Google Calendar');
-    console.log('===================================================');
+    console.log('✅ Evento eliminado');
     return { success: true };
     
   } catch (error) {
-    console.error('❌ ERROR eliminando evento Google Calendar:', error.message);
+    console.error('❌ ERROR eliminando evento:', error.message);
     
     // Si el evento ya no existe, considerarlo éxito
-    if (error.code === 404) {
-      console.log('ℹ️ Evento ya no existe en Google Calendar');
+    if (error.code === 404 || error.code === 410) {
+      console.log('ℹ️ El evento ya no existía');
       return { success: true };
     }
     
@@ -208,6 +269,7 @@ export const eliminarEventoCalendar = async (eventId) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // VERIFICAR CONEXIÓN CON GOOGLE CALENDAR
 // ═══════════════════════════════════════════════════════════════════════════
+
 export const verificarConexionCalendar = async () => {
   try {
     console.log('🔍 Verificando conexión con Google Calendar...');
@@ -216,39 +278,42 @@ export const verificarConexionCalendar = async () => {
     const calendar = google.calendar({ version: 'v3', auth });
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
     
-    // Intentar obtener la lista de calendarios
-    const response = await calendar.calendarList.list();
+    // Intentar obtener info del calendario
+    const response = await calendar.calendars.get({
+      calendarId: calendarId
+    });
     
-    console.log('✅ Conexión exitosa con Google Calendar');
-    console.log(`📅 Calendarios disponibles: ${response.data.items.length}`);
-    
-    // Verificar si podemos acceder al calendario especificado
-    if (calendarId !== 'primary') {
-      const calendario = response.data.items.find(item => item.id === calendarId);
-      if (calendario) {
-        console.log(`✅ Calendario encontrado: ${calendario.summary}`);
-      } else {
-        console.warn(`⚠️ Calendario ${calendarId} no encontrado. Usando primary.`);
-      }
-    }
+    console.log('✅ Conexión exitosa');
+    console.log(`📅 Calendario: ${response.data.summary}`);
+    console.log(`🆔 ID: ${response.data.id}`);
+    console.log(`🌎 Timezone: ${response.data.timeZone}`);
     
     return {
       success: true,
-      calendarios: response.data.items.length
+      calendario: response.data.summary,
+      id: response.data.id,
+      timezone: response.data.timeZone
     };
     
   } catch (error) {
-    console.error('❌ ERROR verificando conexión Google Calendar:', error.message);
+    console.error('❌ ERROR verificando conexión:', error.message);
+    
+    if (error.code === 404) {
+      console.error('   El calendario no existe o no tienes acceso.');
+    }
+    
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      code: error.code
     };
   }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// OBTENER TODOS LOS EVENTOS DEL CALENDARIO (próximos 30 días)
+// OBTENER TODOS LOS EVENTOS DEL CALENDARIO
 // ═══════════════════════════════════════════════════════════════════════════
+
 export const obtenerEventosCalendar = async () => {
   try {
     console.log('📅 Obteniendo eventos de Google Calendar...');
@@ -272,8 +337,7 @@ export const obtenerEventosCalendar = async () => {
     });
     
     const eventos = response.data.items || [];
-    
-    console.log(`📅 ${eventos.length} eventos encontrados en Google Calendar`);
+    console.log(`📅 ${eventos.length} eventos encontrados`);
     
     return {
       success: true,
@@ -299,8 +363,9 @@ export const obtenerEventosCalendar = async () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// OBTENER EVENTOS POR FECHA ESPECÍFICA
+// OBTENER EVENTOS POR FECHA
 // ═══════════════════════════════════════════════════════════════════════════
+
 export const obtenerEventosPorFecha = async (fecha) => {
   try {
     const auth = getGoogleAuth();
@@ -319,8 +384,7 @@ export const obtenerEventosPorFecha = async (fecha) => {
     });
     
     const eventos = response.data.items || [];
-    
-    console.log(`📅 ${eventos.length} eventos encontrados para ${fecha}`);
+    console.log(`📅 ${eventos.length} eventos para ${fecha}`);
     
     return {
       success: true,
@@ -346,6 +410,7 @@ export const obtenerEventosPorFecha = async (fecha) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // VERIFICAR SI UN EVENTO EXISTE
 // ═══════════════════════════════════════════════════════════════════════════
+
 export const verificarEventoExiste = async (eventId) => {
   try {
     if (!eventId) {

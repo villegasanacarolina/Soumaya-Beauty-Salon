@@ -142,12 +142,12 @@ Hola ${reserva.nombreCliente}!
 
 ✅ *TU CITA HA SIDO CONFIRMADA*
 
-📅 *Fecha:* ${fechaFormateada}
-⏰ *Hora:* ${reserva.horaInicio} - ${reserva.horaFin}
-💅 *Servicio:* ${info.nombre}
-💰 *Precio:* $${info.precio} MXN
+*Fecha:* ${fechaFormateada}
+*Hora:* ${reserva.horaInicio} - ${reserva.horaFin}
+*Servicio:* ${info.nombre}
+*Precio:* $${info.precio} MXN
 
-📍 *Ubicación:* Soumaya Beauty Bar
+📍 *Ubicación:* https://maps.app.goo.gl/Hdxpn89JL6pjFTsW7
 
 ¡Te esperamos! 💖
 
@@ -231,11 +231,11 @@ Hola ${nombreCliente}!
 
 Te recordamos que *MAÑANA* tienes tu cita:
 
-📅 *Fecha:* ${fechaFormateada}
-⏰ *Hora:* ${hora}
-💅 *Servicio:* ${info.nombre}
+*Fecha:* ${fechaFormateada}
+*Hora:* ${hora}
+*Servicio:* ${info.nombre}
 
-📍 *Ubicación:* Soumaya Beauty Bar
+📍 *Ubicación:* https://maps.app.goo.gl/Hdxpn89JL6pjFTsW7
 
 ¡No olvides asistir! 💖
 
@@ -277,15 +277,6 @@ export const enviarMensajeCancelacionConfirmada = async (reserva) => {
 Hola ${reserva.nombreCliente},
 
 Tu cita ha sido cancelada exitosamente:
-
-💅 *Servicio:* ${info.nombre}
-📅 *Fecha:* ${fechaFormateada}
-⏰ *Hora:* ${reserva.horaInicio}
-
-✅ El evento fue eliminado de Google Calendar
-✅ El horario está disponible para nuevas reservas
-
-📍 Soumaya Beauty Bar
 
 ¡Esperamos verte pronto! 🌸`;
 

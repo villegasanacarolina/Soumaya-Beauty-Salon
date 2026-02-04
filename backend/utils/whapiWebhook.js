@@ -12,27 +12,30 @@ import { eliminarEventoCalendar } from '../utils/googleCalendarService.js';
 
 const buscarReservaPendiente = async (telefono) => {
   try {
-    // Limpiar teléfono (solo últimos 10 dígitos)
-    const ultimos10 = telefono.replace(/\D/g, '').slice(-10);
+    console.log('🔍 Buscando reserva pendiente para teléfono:', telefono);
     
-    if (ultimos10.length !== 10) {
-      console.log('⚠️ Teléfono no válido:', telefono);
+    // Asegurar que el teléfono tenga exactamente 10 dígitos
+    const telefono10 = telefono.replace(/\D/g, '').slice(-10);
+    
+    if (telefono10.length !== 10) {
+      console.log('⚠️ Teléfono no válido (no 10 dígitos):', telefono);
       return null;
     }
 
     // Buscar la reserva confirmada más reciente de este teléfono
-    // que esté esperando respuesta (ya sea de confirmación o recordatorio)
+    // que esté esperando respuesta
     const reservas = await Reservation.find({
-      telefonoCliente: { $regex: ultimos10 + '$' }, // Buscar teléfono que termine con estos dígitos
+      telefonoCliente: { $regex: telefono10 + '$' }, // Buscar teléfono que termine con estos dígitos
       estado: 'confirmada',
       esperandoRespuesta: true
     }).sort({ createdAt: -1 }).limit(1);
 
     if (reservas.length === 0) {
-      console.log('ℹ️ No hay reservas pendientes para:', ultimos10);
+      console.log('ℹ️ No hay reservas pendientes para:', telefono10);
       return null;
     }
 
+    console.log('✅ Reserva encontrada:', reservas[0]._id);
     return reservas[0];
   } catch (error) {
     console.error('❌ Error buscando reserva:', error);
@@ -68,7 +71,7 @@ export const handleWhapiWebhook = async (req, res) => {
         continue;
       }
 
-      console.log('📱 Teléfono:', datos.telefono);
+      console.log('📱 Teléfono (10 dígitos):', datos.telefono);
       console.log('📝 Texto:', datos.texto);
       console.log('✅ ¿Es Sí?:', datos.esAfirmativo);
       console.log('❌ ¿Es No?:', datos.esNegativo);

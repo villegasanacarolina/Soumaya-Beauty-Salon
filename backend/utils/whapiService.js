@@ -30,29 +30,29 @@ const formatearFecha = (fecha) => {
 // Helper: Formatear teléfono para Whapi (¡CORREGIDO!)
 // WhatsApp necesita: 521234567890@s.whatsapp.net
 const formatearTelefonoWhapi = (telefono) => {
+  console.log('📞 Teléfono original para WhatsApp:', telefono);
+  
   // 1. Eliminar todo excepto números
   let numeros = telefono.replace(/\D/g, '');
   
-  console.log('📞 Teléfono original:', telefono);
   console.log('📞 Solo números:', numeros);
   
-  // 2. Si tiene 10 dígitos, agregar código de país México (52)
-  if (numeros.length === 10) {
-    numeros = '52' + numeros;
-  }
-  // 3. Si empieza con +52, quitar el + y ya tiene 52
-  else if (numeros.startsWith('52') && numeros.length === 12) {
-    // Ya está bien
-  }
-  // 4. Si tiene 12 dígitos y empieza con otro código, dejarlo
-  else if (numeros.length === 12) {
-    // Ya está bien
+  // IMPORTANTE: Siempre tomar los últimos 10 dígitos (para México)
+  // WhatsApp y Whapi.cloud agregan automáticamente el +52
+  if (numeros.length > 10) {
+    numeros = numeros.slice(-10);
   }
   
-  console.log('📞 Formateado para Whapi:', numeros);
+  // Verificar que sean exactamente 10 dígitos
+  if (numeros.length !== 10) {
+    console.error('❌ Error: Teléfono no tiene 10 dígitos:', numeros);
+    throw new Error('Teléfono debe tener 10 dígitos');
+  }
   
-  // WhatsApp requiere: 521234567890@s.whatsapp.net
-  return `${numeros}@s.whatsapp.net`;
+  console.log('📞 Teléfono formateado para Whapi (10 dígitos):', numeros);
+  
+  // Whapi requiere: 521234567890@s.whatsapp.net (52 + 10 dígitos)
+  return `52${numeros}@s.whatsapp.net`;
 };
 
 // Función principal para enviar mensajes
@@ -308,21 +308,26 @@ export const procesarMensajeEntrante = (mensaje) => {
     const from = mensaje.from; // Formato: 521234567890@s.whatsapp.net
     const texto = mensaje.text?.body?.toLowerCase().trim() || '';
     
+    console.log('📨 Mensaje entrante de:', from);
+    console.log('📝 Texto:', texto);
+    
     // Extraer solo números del remitente
     const numeros = from.replace(/\D/g, '');
     
-    // Si tiene 12 dígitos (52 + 10), quitar el 52
+    // Tomar solo los últimos 10 dígitos
     let telefono = numeros;
-    if (numeros.length === 12 && numeros.startsWith('52')) {
-      telefono = numeros.slice(2);
+    if (numeros.length > 10) {
+      telefono = numeros.slice(-10);
     }
     
+    console.log('📱 Teléfono extraído (10 dígitos):', telefono);
+    
     // Determinar respuesta
-    const esAfirmativo = ['si', 'sí', 'yes', 'cancelar'].some(palabra => 
+    const esAfirmativo = ['si', 'sí', 'yes', 'cancelar', 'cancela'].some(palabra => 
       texto.includes(palabra)
     );
     
-    const esNegativo = ['no', 'mantener', 'seguir'].some(palabra => 
+    const esNegativo = ['no', 'mantener', 'seguir', 'confirmar'].some(palabra => 
       texto.includes(palabra)
     );
     

@@ -3,9 +3,11 @@ import { google } from 'googleapis';
 // Obtener autenticación
 const getGoogleAuth = () => {
   try {
+    console.log('🔐 Obteniendo autenticación Google...');
     const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
     
     if (!serviceAccountJson) {
+      console.error('❌ GOOGLE_SERVICE_ACCOUNT_JSON no configurada');
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON no configurada');
     }
     
@@ -16,6 +18,7 @@ const getGoogleAuth = () => {
       scopes: ['https://www.googleapis.com/auth/calendar']
     });
     
+    console.log('✅ Autenticación Google obtenida');
     return auth;
   } catch (error) {
     console.error('❌ ERROR autenticación Google:', error.message);
@@ -26,13 +29,20 @@ const getGoogleAuth = () => {
 // CREAR EVENTO EN GOOGLE CALENDAR
 export const crearEventoCalendar = async (reserva) => {
   try {
-    console.log('📅 Creando evento en Google Calendar...');
+    console.log('📅 ========== CREANDO EVENTO EN GOOGLE CALENDAR ==========');
+    console.log('🆔 ID Reserva:', reserva._id);
+    console.log('👤 Cliente:', reserva.nombreCliente);
+    console.log('📱 Teléfono:', reserva.telefonoCliente);
+    console.log('💅 Servicio:', reserva.servicio);
+    console.log('📅 Fecha:', reserva.fecha);
+    console.log('⏰ Hora:', `${reserva.horaInicio} - ${reserva.horaFin}`);
     
     const auth = getGoogleAuth();
     const calendar = google.calendar({ version: 'v3', auth });
     
     // Usar calendario principal
     const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+    console.log('📅 Calendar ID:', calendarId);
     
     // Mapeo de servicios
     const serviciosNombres = {
@@ -46,27 +56,31 @@ export const crearEventoCalendar = async (reserva) => {
     };
     
     const servicioNombre = serviciosNombres[reserva.servicio] || reserva.servicio;
+    console.log('💅 Nombre del servicio:', servicioNombre);
     
-    // Formatear fechas para Google Calendar
+    // Formatear fechas para Google Calendar (IMPORTANTE: timezone)
     const startDateTime = `${reserva.fecha}T${reserva.horaInicio}:00`;
     const endDateTime = `${reserva.fecha}T${reserva.horaFin}:00`;
     
+    console.log('⏰ Start DateTime:', startDateTime);
+    console.log('⏰ End DateTime:', endDateTime);
+    console.log('🌎 Timezone:', 'America/Mexico_City');
+    
     // Crear descripción detallada
-    const description = `
-💅 SERVICIO: ${servicioNombre}
+    const description = `💅 SERVICIO: ${servicioNombre}
 👤 CLIENTE: ${reserva.nombreCliente}
 📱 TELÉFONO: ${reserva.telefonoCliente}
 📅 FECHA: ${reserva.fecha}
-⏰ HORA: ${reserva.horaInicio} - ${reserva.horaFin}
-⏳ DURACIÓN: ${reserva.duracion} minutos
+⏰ HORA: ${reserva.horaInicio} - ${reserva.horaFin} (${reserva.duracion} min)
 💰 PRECIO: $${reserva.precio} MXN
 🆔 ID RESERVA: ${reserva._id}
 
 📍 SOUMAYA BEAUTY BAR
 
 ---
-Creado automáticamente por el sistema de reservas.
-    `.trim();
+Creado automáticamente por el sistema de reservas.`;
+    
+    console.log('📝 Descripción creada');
     
     // Configurar evento
     const event = {
@@ -84,22 +98,17 @@ Creado automáticamente por el sistema de reservas.
       reminders: {
         useDefault: false,
         overrides: [
-          { method: 'popup', minutes: 60 },
+          { method: 'email', minutes: 60 },
           { method: 'popup', minutes: 30 }
         ]
       },
-      colorId: '9', // Color morado
+      colorId: '11', // Color rosa (#D98FA0 similar)
       guestsCanInviteOthers: false,
       guestsCanModify: false,
       guestsCanSeeOtherGuests: false
     };
     
-    console.log('📝 Datos del evento:');
-    console.log('- Cliente:', reserva.nombreCliente);
-    console.log('- Servicio:', servicioNombre);
-    console.log('- Fecha:', reserva.fecha);
-    console.log('- Hora:', `${reserva.horaInicio} - ${reserva.horaFin}`);
-    console.log('- Calendario:', calendarId);
+    console.log('📋 Evento configurado, insertando en Google Calendar...');
     
     // Insertar evento
     const result = await calendar.events.insert({
@@ -108,9 +117,13 @@ Creado automáticamente por el sistema de reservas.
       sendUpdates: 'none'
     });
     
-    console.log('✅ Evento creado en Google Calendar');
+    console.log('✅ ========== EVENTO CREADO EXITOSAMENTE ==========');
     console.log('🆔 Event ID:', result.data.id);
     console.log('🔗 Enlace:', result.data.htmlLink);
+    console.log('📅 Título:', result.data.summary);
+    console.log('⏰ Inicio:', result.data.start.dateTime);
+    console.log('⏰ Fin:', result.data.end.dateTime);
+    console.log('====================================================');
     
     return {
       success: true,
@@ -118,24 +131,25 @@ Creado automáticamente por el sistema de reservas.
       htmlLink: result.data.htmlLink,
       data: {
         summary: result.data.summary,
-        start: result.data.start,
-        end: result.data.end,
+        start: result.data.start.dateTime,
+        end: result.data.end.dateTime,
         description: result.data.description
       }
     };
     
   } catch (error) {
-    console.error('❌ ERROR creando evento Google Calendar:');
-    console.error('Mensaje:', error.message);
+    console.error('❌ ========== ERROR CREANDO EVENTO GOOGLE CALENDAR ==========');
+    console.error('📌 Tipo de error:', error.name);
+    console.error('📌 Mensaje:', error.message);
+    console.error('📌 Código:', error.code);
     
-    // Información adicional para debugging
-    if (error.code === 401) {
-      console.error('⚠️ Error de autenticación. Verifica las credenciales.');
-    } else if (error.code === 403) {
-      console.error('⚠️ Error de permisos. Verifica los scopes.');
-    } else if (error.code === 404) {
-      console.error('⚠️ Calendario no encontrado.');
+    if (error.response) {
+      console.error('📌 Status:', error.response.status);
+      console.error('📌 Data:', JSON.stringify(error.response.data, null, 2));
     }
+    
+    console.error('❌ Stack trace:', error.stack);
+    console.error('=============================================================');
     
     return {
       success: false,
@@ -153,7 +167,8 @@ export const eliminarEventoCalendar = async (eventId) => {
       return { success: false, error: 'No eventId' };
     }
     
-    console.log('🗑️ Eliminando evento de Google Calendar:', eventId);
+    console.log('🗑️ ========== ELIMINANDO EVENTO DE GOOGLE CALENDAR ==========');
+    console.log('🆔 Event ID:', eventId);
     
     const auth = getGoogleAuth();
     const calendar = google.calendar({ version: 'v3', auth });
@@ -165,6 +180,7 @@ export const eliminarEventoCalendar = async (eventId) => {
     });
     
     console.log('✅ Evento eliminado de Google Calendar');
+    console.log('===================================================');
     return { success: true };
     
   } catch (error) {

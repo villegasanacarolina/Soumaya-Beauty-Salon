@@ -9,28 +9,27 @@ const generateToken = (id) => {
 
 // ─── Helper: Limpiar y formatear teléfono ────────────────────────────────────
 const limpiarTelefono = (telefono) => {
+  console.log('📞 ========== LIMPIANDO TELÉFONO ==========');
+  console.log('📞 Teléfono original:', telefono);
+  
   // Eliminar TODO excepto números
   let num = telefono.replace(/\D/g, '');
   
-  // Si tiene código de país México (12 dígitos: 52 + 10), quitar los primeros 2
-  if (num.length === 12 && num.startsWith('52')) {
-    num = num.slice(2);
-  }
+  console.log('📞 Solo números:', num);
   
-  // Si tiene código de país USA (11 dígitos: 1 + 10), quitar el 1
-  if (num.length === 11 && num.startsWith('1')) {
-    num = num.slice(1);
-  }
-  
-  // Si tiene +52 al inicio (usuario escribió +52), quitar
-  if (num.startsWith('52') && num.length > 10) {
-    num = num.slice(2);
+  // IMPORTANTE: Siempre tomar los últimos 10 dígitos (para México)
+  // Esto asegura consistencia sin importar cómo lo escriba el usuario
+  if (num.length > 10) {
+    num = num.slice(-10);
   }
   
   // Debe quedar con exactamente 10 dígitos
   if (num.length !== 10) {
+    console.error('❌ Error: Teléfono no tiene 10 dígitos:', num);
     throw new Error('El teléfono debe tener 10 dígitos. Ejemplo: 3511270276');
   }
+  
+  console.log('✅ Teléfono limpio (10 dígitos):', num);
   
   return num;
 };
@@ -58,9 +57,6 @@ export const register = async (req, res) => {
     } catch (error) {
       return res.status(400).json({ message: error.message });
     }
-
-    console.log('📞 Teléfono original:', telefono);
-    console.log('📞 Teléfono limpio:', telefonoLimpio);
 
     // Verificar si ya existe un usuario con ese teléfono limpio
     const userExists = await User.findOne({ telefono: telefonoLimpio });
@@ -119,11 +115,11 @@ export const login = async (req, res) => {
     try {
       telefonoLimpio = limpiarTelefono(telefono);
     } catch (error) {
+      console.error('❌ Error limpiando teléfono:', error.message);
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
-    console.log('📞 Login - Teléfono original:', telefono);
-    console.log('📞 Login - Teléfono limpio:', telefonoLimpio);
+    console.log('📞 Buscando usuario con teléfono:', telefonoLimpio);
 
     // Buscar usuario con teléfono limpio
     const user = await User.findOne({ telefono: telefonoLimpio });

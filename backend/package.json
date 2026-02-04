@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Sistema de reservas para Soumaya Beauty Bar con Google Calendar y WhatsApp",
-  "main": "src/server.js",
+  "main": "backend/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "sync-calendar": "node -e \"import('./src/utils/syncGoogleCalendar.js').then(m => m.syncGoogleCalendar()).catch(console.error)\"",
-    "verify-integrity": "node -e \"import('./src/utils/syncGoogleCalendar.js').then(m => m.verificarIntegridad()).catch(console.error)\"",
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js",
+    "sync-calendar": "node -e \"import('./backend/utils/syncGoogleCalendar.js').then(m => m.syncGoogleCalendar()).catch(console.error)\"",
+    "verify-integrity": "node -e \"import('./backend/utils/syncGoogleCalendar.js').then(m => m.verificarIntegridad()).catch(console.error)\"",
     "test-webhook": "node -e \"console.log('Webhook URL: https://soumaya-beauty-salon.onrender.com/api/whapi/webhook')\""
   },
   "keywords": [
@@ -30,8 +30,7 @@
     "cors": "^2.8.5",
     "axios": "^1.6.2",
     "googleapis": "^128.0.0",
-    "node-cron": "^3.0.3",
-    "socket.io": "^4.7.2"
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

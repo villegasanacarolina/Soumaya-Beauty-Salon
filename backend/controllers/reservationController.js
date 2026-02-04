@@ -50,11 +50,17 @@ export const createReservation = async (req, res) => {
 
     // Validaciones
     if (!serviceDurations[servicio]) {
-      return res.status(400).json({ message: 'Servicio inválido' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Servicio inválido' 
+      });
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      return res.status(400).json({ message: 'Formato de fecha inválido' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Formato de fecha inválido. Use YYYY-MM-DD' 
+      });
     }
 
     const duracion = serviceDurations[servicio].duracion;
@@ -66,13 +72,17 @@ export const createReservation = async (req, res) => {
 
     if (horaInicioNum < 10 || horaFinNum > 20) {
       return res.status(400).json({
+        success: false,
         message: 'Horario no disponible. El salón opera de 10:00 AM a 8:00 PM'
       });
     }
 
     const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
     if (!disponible) {
-      return res.status(400).json({ message: 'El horario ya está ocupado' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'El horario ya está ocupado. Por favor selecciona otro horario.' 
+      });
     }
 
     // ── 1. Crear reserva en MongoDB ─────────────────────────────────────
@@ -87,7 +97,7 @@ export const createReservation = async (req, res) => {
       duracion,
       precio,
       estado:          'confirmada',
-      esperandoRespuesta: true,  // Inmediatamente esperando respuesta
+      esperandoRespuesta: true,
       recordatorioEnviado: false
     });
 
@@ -136,8 +146,23 @@ export const createReservation = async (req, res) => {
 
     console.log('========== FIN CREAR RESERVA ==========');
 
+    // Formatear respuesta
+    const [year, month, day] = reservation.fecha.split('-').map(Number);
+    const fechaObj = new Date(year, month - 1, day);
+    const fechaLegible = fechaObj.toLocaleDateString('es-MX', {
+      weekday: 'long',
+      year:    'numeric',
+      month:   'long',
+      day:     'numeric'
+    });
+
     res.status(201).json({
-      ...reservation.toObject(),
+      success: true,
+      reservation: {
+        ...reservation.toObject(),
+        servicioNombre: serviceDurations[reservation.servicio]?.nombre,
+        fechaLegible
+      },
       calendarEventId,
       whatsappEnviado,
       salonNotificado,
@@ -150,9 +175,16 @@ export const createReservation = async (req, res) => {
   } catch (error) {
     console.error('❌ ERROR:', error);
     if (error.code === 11000) {
-      return res.status(400).json({ message: 'Este horario ya está reservado' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Este horario ya está reservado' 
+      });
     }
-    res.status(500).json({ message: 'Error al crear la reserva', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al crear la reserva', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
 
@@ -164,7 +196,10 @@ export const getWeekAvailability = async (req, res) => {
     const { fecha } = req.params;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      return res.status(400).json({ message: 'Formato de fecha inválido' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Formato de fecha inválido. Use YYYY-MM-DD' 
+      });
     }
 
     const [year, month, day] = fecha.split('-').map(Number);
@@ -184,7 +219,7 @@ export const getWeekAvailability = async (req, res) => {
 
     console.log(`📊 Disponibilidad semanal: ${reservas.length} reservas confirmadas para todos los usuarios`);
     
-    // Formatear respuesta con información detallada
+    // Formatear respuesta
     const disponibilidad = reservas.map(reserva => ({
       _id: reserva._id,
       servicio: reserva.servicio,
@@ -198,13 +233,12 @@ export const getWeekAvailability = async (req, res) => {
       estado: reserva.estado,
       servicioNombre: serviceDurations[reserva.servicio]?.nombre,
       googleCalendarEventId: reserva.googleCalendarEventId,
-      // Información para mostrar en calendario
-      ocupado: true, // Siempre true porque son reservas confirmadas
-      color: '#D98FA0', // Color rosa para ocupado
+      ocupado: true,
+      color: '#D98FA0',
       tooltip: `${serviceDurations[reserva.servicio]?.nombre} - ${reserva.nombreCliente}`
     }));
 
-    // También incluir horarios ocupados por franjas
+    // Calcular horarios ocupados por franjas
     const horariosOcupados = [];
     reservas.forEach(reserva => {
       const horasOcupadas = calcularHorasOcupadas(reserva.horaInicio, reserva.horaFin);
@@ -218,14 +252,21 @@ export const getWeekAvailability = async (req, res) => {
     });
 
     res.json({
+      success: true,
       reservas: disponibilidad,
       horariosOcupados: horariosOcupados,
-      totalReservas: reservas.length
+      totalReservas: reservas.length,
+      fechaInicio,
+      fechaFin
     });
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al obtener disponibilidad', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener disponibilidad', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
 
@@ -248,14 +289,17 @@ const calcularHorasOcupadas = (horaInicio, horaFin) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// VERIFICAR HORARIO OCUPADO (nueva función)
+// VERIFICAR HORARIO OCUPADO
 // ═══════════════════════════════════════════════════════════════════════════
 export const checkTimeSlot = async (req, res) => {
   try {
     const { fecha, horaInicio, servicio } = req.body;
     
     if (!fecha || !horaInicio) {
-      return res.status(400).json({ message: 'Fecha y hora son requeridas' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Fecha y hora son requeridas' 
+      });
     }
     
     let duracion = 60; // Default
@@ -266,6 +310,7 @@ export const checkTimeSlot = async (req, res) => {
     const disponible = await verificarDisponibilidad(fecha, horaInicio, duracion);
     
     res.json({
+      success: true,
       disponible,
       mensaje: disponible 
         ? 'Horario disponible' 
@@ -277,7 +322,11 @@ export const checkTimeSlot = async (req, res) => {
     
   } catch (error) {
     console.error('❌ ERROR verificando horario:', error);
-    res.status(500).json({ message: 'Error verificando horario', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error verificando horario', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
 
@@ -296,6 +345,7 @@ export const getUserReservations = async (req, res) => {
 
       return {
         _id:            reserva._id,
+        usuario:        reserva.usuario,
         servicio:       reserva.servicio,
         fecha:          reserva.fecha,
         horaInicio:     reserva.horaInicio,
@@ -304,6 +354,7 @@ export const getUserReservations = async (req, res) => {
         precio:         reserva.precio,
         estado:         reserva.estado,
         nombreCliente:  reserva.nombreCliente,
+        telefonoCliente: reserva.telefonoCliente,
         servicioNombre: serviceDurations[reserva.servicio]?.nombre,
         fechaLegible:   date.toLocaleDateString('es-MX', {
           weekday: 'long',
@@ -314,16 +365,25 @@ export const getUserReservations = async (req, res) => {
         googleCalendarEventId: reserva.googleCalendarEventId,
         esperandoRespuesta: reserva.esperandoRespuesta,
         recordatorioEnviado: reserva.recordatorioEnviado,
-        createdAt: reserva.createdAt
+        createdAt: reserva.createdAt,
+        updatedAt: reserva.updatedAt
       };
     });
 
     console.log(`📋 Reservas del usuario ${req.user.nombreCompleto}: ${reservations.length}`);
-    res.json(reservasFormateadas);
+    res.json({
+      success: true,
+      count: reservations.length,
+      reservations: reservasFormateadas
+    });
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al obtener reservas', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al obtener reservas', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
 
@@ -339,21 +399,32 @@ export const cancelReservation = async (req, res) => {
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
-      return res.status(404).json({ message: 'Reservación no encontrada' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Reservación no encontrada' 
+      });
     }
 
     if (reservation.usuario.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'No autorizado' });
+      return res.status(403).json({ 
+        success: false,
+        message: 'No autorizado' 
+      });
     }
 
     if (reservation.estado === 'cancelada') {
-      return res.status(400).json({ message: 'La reserva ya está cancelada' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'La reserva ya está cancelada' 
+      });
     }
 
     // Cancelar en MongoDB
     reservation.estado = 'cancelada';
     reservation.esperandoRespuesta = false;
     await reservation.save();
+
+    console.log('✅ Reserva cancelada en DB:', reservation._id);
 
     // Eliminar de Google Calendar
     if (reservation.googleCalendarEventId) {
@@ -381,10 +452,10 @@ export const cancelReservation = async (req, res) => {
       console.error('⚠️ Error enviando confirmación:', e.message);
     }
 
-    console.log('✅ Reserva cancelada:', reservation._id);
     console.log('========== FIN CANCELAR ==========');
 
     res.json({
+      success: true,
       message: 'Reserva cancelada exitosamente',
       reservation: {
         _id:    reservation._id,
@@ -394,7 +465,11 @@ export const cancelReservation = async (req, res) => {
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al cancelar reserva', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al cancelar reserva', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
 
@@ -409,11 +484,17 @@ export const deleteReservation = async (req, res) => {
     const reservation = await Reservation.findById(req.params.id);
 
     if (!reservation) {
-      return res.status(404).json({ message: 'Reservación no encontrada' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Reservación no encontrada' 
+      });
     }
 
     if (reservation.usuario.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'No autorizado' });
+      return res.status(403).json({ 
+        success: false,
+        message: 'No autorizado' 
+      });
     }
 
     // Si la reserva está confirmada y tiene evento en Google Calendar, eliminarlo
@@ -429,16 +510,23 @@ export const deleteReservation = async (req, res) => {
     await Reservation.findByIdAndDelete(req.params.id);
     console.log('🗑️ Reserva eliminada:', req.params.id);
 
-    res.json({ message: 'Reserva eliminada del historial' });
+    res.json({ 
+      success: true,
+      message: 'Reserva eliminada del historial' 
+    });
 
   } catch (error) {
     console.error('❌ ERROR:', error);
-    res.status(500).json({ message: 'Error al eliminar reserva', error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: 'Error al eliminar reserva', 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+    });
   }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// OBTENER TODAS LAS RESERVAS (para admin/calendario)
+// OBTENER TODAS LAS RESERVAS (para calendario público)
 // ═══════════════════════════════════════════════════════════════════════════
 export const getAllReservations = async (req, res) => {
   try {
@@ -456,7 +544,7 @@ export const getAllReservations = async (req, res) => {
       title: `${serviceDurations[reserva.servicio]?.nombre} - ${reserva.nombreCliente}`,
       start: `${reserva.fecha}T${reserva.horaInicio}:00`,
       end: `${reserva.fecha}T${reserva.horaFin}:00`,
-      color: '#D98FA0', // Rosa
+      color: '#D98FA0',
       extendedProps: {
         servicio: reserva.servicio,
         nombreCliente: reserva.nombreCliente,
@@ -469,7 +557,8 @@ export const getAllReservations = async (req, res) => {
     res.json({
       success: true,
       count: reservations.length,
-      reservas: formateadas
+      reservations: formateadas,
+      lastUpdated: new Date().toISOString()
     });
     
   } catch (error) {
@@ -477,7 +566,7 @@ export const getAllReservations = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Error al obtener reservas', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined 
     });
   }
 };

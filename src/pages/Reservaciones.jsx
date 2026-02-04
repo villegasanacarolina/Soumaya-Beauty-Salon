@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut, X, CheckCircle, AlertCircle, Trash2, RefreshCw, MessageCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, LogOut, X, CheckCircle, AlertCircle, Trash2, RefreshCw, MessageCircle, Loader2 } from 'lucide-react';
 
 const API_URL = 'https://soumaya-beauty-salon.onrender.com/api';
 
@@ -24,17 +24,24 @@ const Toast = ({ message, type, onClose }) => {
 
   const bgColor = type === 'success'
     ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+    : type === 'warning'
+    ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
     : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800';
 
   const textColor = type === 'success'
     ? 'text-green-800 dark:text-green-200'
+    : type === 'warning'
+    ? 'text-yellow-800 dark:text-yellow-200'
     : 'text-red-800 dark:text-red-200';
 
   const iconColor = type === 'success'
     ? 'text-green-500 dark:text-green-400'
+    : type === 'warning'
+    ? 'text-yellow-500 dark:text-yellow-400'
     : 'text-red-500 dark:text-red-400';
 
-  const Icon = type === 'success' ? CheckCircle : AlertCircle;
+  const Icon = type === 'success' ? CheckCircle : 
+               type === 'warning' ? AlertCircle : AlertCircle;
 
   return (
     <div className={`fixed top-24 right-4 z-50 max-w-md w-full ${bgColor} border-2 rounded-xl shadow-2xl p-4`}>
@@ -105,7 +112,6 @@ const ReagendarModal = ({ reserva, onConfirmCancel, onClose }) => {
 
         {/* Botones */}
         <div className="flex flex-col gap-3">
-          {/* Cancelar + Reagendar */}
           <button
             onClick={() => onConfirmCancel(true)}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors"
@@ -114,7 +120,6 @@ const ReagendarModal = ({ reserva, onConfirmCancel, onClose }) => {
             Cancelar y Reagendar
           </button>
 
-          {/* Solo cancelar */}
           <button
             onClick={() => onConfirmCancel(false)}
             className="w-full px-4 py-3 bg-red-500 text-white rounded-xl font-semibold hover:bg-red-600 transition-colors"
@@ -122,7 +127,6 @@ const ReagendarModal = ({ reserva, onConfirmCancel, onClose }) => {
             Solo Cancelar
           </button>
 
-          {/* No cancelar */}
           <button
             onClick={onClose}
             className="w-full px-4 py-3 bg-muted text-foreground rounded-xl font-medium hover:bg-muted/80 transition-colors"
@@ -155,19 +159,40 @@ const Reservaciones = () => {
   const [misReservas, setMisReservas] = useState([]);
   const [horariosOcupados, setHorariosOcupados] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Modal de cancelación
   const [modalReserva, setModalReserva] = useState(null);
 
+  // Timer para polling
+  const [pollingInterval, setPollingInterval] = useState(null);
+
   useEffect(() => {
     if (!isAuthenticated) navigate('/login');
   }, [isAuthenticated, navigate]);
 
+  // Cargar datos iniciales
   useEffect(() => {
     cargarDisponibilidad();
     cargarMisReservas();
   }, [currentWeekStart]);
+
+  // Configurar polling cada 30 segundos
+  useEffect(() => {
+    if (isAuthenticated && selectedService) {
+      const interval = setInterval(() => {
+        console.log('🔄 Polling: Actualizando disponibilidad...');
+        cargarDisponibilidadSilenciosa();
+      }, 30000); // 30 segundos
+      
+      setPollingInterval(interval);
+      
+      return () => {
+        if (interval) clearInterval(interval);
+      };
+    }
+  }, [isAuthenticated, selectedService]);
 
   // ── Toast helpers ─────────────────────────────────────────────────────────
   const showToast = (message, type = 'success') => setToast({ message, type });
@@ -182,6 +207,7 @@ const Reservaciones = () => {
   // ── Cargar datos ──────────────────────────────────────────────────────────
   const cargarDisponibilidad = async () => {
     try {
+      setRefreshing(true);
       const fechaISO = formatDateToYMD(currentWeekStart);
       const response = await fetch(`${API_URL}/reservations/availability/${fechaISO}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -190,13 +216,34 @@ const Reservaciones = () => {
       if (!response.ok) throw new Error(`Error ${response.status}`);
       
       const data = await response.json();
-      setReservas(data.reservas || []);
-      setHorariosOcupados(data.horariosOcupados || []);
-      
-      console.log(`📊 Citas ocupadas esta semana: ${data.totalReservas || 0}`);
+      if (data.success) {
+        setReservas(data.reservas || []);
+        setHorariosOcupados(data.horariosOcupados || []);
+        console.log(`📊 ${data.totalReservas || 0} citas ocupadas esta semana`);
+      }
     } catch (err) {
       console.error('❌ Error cargando disponibilidad:', err);
-      showToast('Error cargando horarios disponibles', 'error');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const cargarDisponibilidadSilenciosa = async () => {
+    try {
+      const fechaISO = formatDateToYMD(currentWeekStart);
+      const response = await fetch(`${API_URL}/reservations/availability/${fechaISO}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setReservas(data.reservas || []);
+          setHorariosOcupados(data.horariosOcupados || []);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error en polling:', err);
     }
   };
 
@@ -207,10 +254,11 @@ const Reservaciones = () => {
       });
       if (!response.ok) throw new Error(`Error ${response.status}`);
       const data = await response.json();
-      setMisReservas(data);
+      if (data.success) {
+        setMisReservas(data.reservations || []);
+      }
     } catch (err) {
       console.error('❌ Error cargando mis reservas:', err);
-      showToast('Error cargando tus citas', 'error');
     }
   };
 
@@ -250,7 +298,6 @@ const Reservaciones = () => {
     return reservas.some((reserva) => {
       if (reserva.fecha !== fechaStr) return false;
       
-      // Calcular horas ocupadas por esta reserva
       const [horaInicioNum, minutoInicio] = reserva.horaInicio.split(':').map(Number);
       const [horaFinNum, minutoFin] = reserva.horaFin.split(':').map(Number);
       const [horaSelNum, minutoSel] = hora.split(':').map(Number);
@@ -290,67 +337,72 @@ const Reservaciones = () => {
   };
 
   // ── Agendar cita ──────────────────────────────────────────────────────────
-const agendarCita = async (diaDate, hora) => {
-  if (!selectedService) {
-    showToast('Por favor selecciona un servicio primero', 'error');
-    return;
-  }
-
-  // Verificar si ya está ocupado
-  if (estaOcupado(diaDate, hora)) {
-    showToast('Este horario ya está ocupado. Por favor selecciona otro.', 'error');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const fechaStr = formatDateToYMD(diaDate);
-
-    const response = await fetch(`${API_URL}/reservations`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        servicio: selectedService,
-        fecha: fechaStr,
-        horaInicio: hora
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Error al crear la reservación');
+  const agendarCita = async (diaDate, hora) => {
+    if (!selectedService) {
+      showToast('Por favor selecciona un servicio primero', 'error');
+      return;
     }
 
-    console.log('✅ Reserva creada:', data);
-
-    // Mostrar mensaje según si WhatsApp se envió
-    if (data.whatsappEnviado) {
-      showToast(
-        `✅ Cita agendada exitosamente! Se ha enviado confirmación por WhatsApp a ${user.telefono}`,
-        'success'
-      );
-    } else {
-      showToast(
-        `✅ Cita agendada. Hubo un error enviando WhatsApp, pero tu cita está confirmada.`,
-        'warning'
-      );
+    // Verificar si ya está ocupado
+    if (estaOcupado(diaDate, hora)) {
+      showToast('Este horario ya está ocupado. Por favor selecciona otro.', 'error');
+      return;
     }
 
-    // Recargar datos inmediatamente para mostrar como ocupado
-    await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
+    setLoading(true);
 
-  } catch (error) {
-    console.error('❌ Error:', error);
-    showToast(error.message || 'Error al agendar la cita', 'error');
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const fechaStr = formatDateToYMD(diaDate);
+
+      const response = await fetch(`${API_URL}/reservations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          servicio: selectedService,
+          fecha: fechaStr,
+          horaInicio: hora
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Error al crear la reservación');
+      }
+
+      console.log('✅ Reserva creada:', data);
+
+      // Mostrar mensaje según si WhatsApp se envió
+      if (data.whatsappEnviado) {
+        showToast(
+          `✅ Cita agendada exitosamente! Se ha enviado confirmación por WhatsApp a ${user.telefono}`,
+          'success'
+        );
+      } else if (data.whatsappError) {
+        showToast(
+          `✅ Cita agendada. Hubo un error enviando WhatsApp: ${data.whatsappError}`,
+          'warning'
+        );
+      } else {
+        showToast(
+          `✅ Cita agendada exitosamente!`,
+          'success'
+        );
+      }
+
+      // Recargar datos inmediatamente para mostrar como ocupado
+      await Promise.all([cargarDisponibilidad(), cargarMisReservas()]);
+
+    } catch (error) {
+      console.error('❌ Error:', error);
+      showToast(error.message || 'Error al agendar la cita', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ── Cancelar reserva ─────────────────────────────────────────────────────
   const abrirModalCancelar = (reserva) => {
@@ -368,7 +420,10 @@ const agendarCita = async (diaDate, hora) => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (!response.ok) throw new Error(`Error ${response.status}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || `Error ${response.status}`);
+      }
 
       if (reagendar) {
         showToast('Cita cancelada. Selecciona un nuevo horario 👇', 'success');
@@ -401,7 +456,12 @@ const agendarCita = async (diaDate, hora) => {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error(`Error ${response.status}`);
+      
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || `Error ${response.status}`);
+      }
+      
       showToast('Cita eliminada del historial', 'success');
       await cargarMisReservas();
     } catch (err) {
@@ -443,7 +503,10 @@ const agendarCita = async (diaDate, hora) => {
             <div>
               <h1 className="text-3xl md:text-4xl font-alex-brush text-white">Reservaciones</h1>
               <p className="text-white/90 mt-1">Hola, {user?.nombreCompleto}</p>
-              <p className="text-white/80 text-sm">Citas ocupadas aparecen en rosa automáticamente</p>
+              <p className="text-white/80 text-sm">
+                🕒 Actualización automática cada 30 segundos
+                {refreshing && <span className="ml-2"><Loader2 className="w-3 h-3 animate-spin inline" /></span>}
+              </p>
             </div>
             <button
               onClick={logout}
@@ -467,7 +530,7 @@ const agendarCita = async (diaDate, hora) => {
             </h2>
           </div>
           <p className="text-muted-foreground mb-4">
-            Al agendar, recibirás confirmación AUTOMÁTICA por WhatsApp
+            Al agendar, recibirás confirmación <strong>AUTOMÁTICA</strong> por WhatsApp
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {Object.entries(serviceDurations).map(([key, value]) => (
@@ -503,7 +566,7 @@ const agendarCita = async (diaDate, hora) => {
                   {diasSemana[6].toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {reservas.length} citas ocupadas esta semana
+                  {reservas.length} citas ocupadas • Actualización automática
                 </p>
               </div>
               <button onClick={() => cambiarSemana(1)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white hover:bg-primary/90" disabled={loading}>
@@ -546,7 +609,6 @@ const agendarCita = async (diaDate, hora) => {
                         fechaHoraSeleccionada.setHours(horasSel, minutosSel, 0, 0);
                         const pasado = fechaHoraSeleccionada < ahora;
 
-                        // Color rosa para ocupado
                         const backgroundColor = ocupado ? '#D98FA0' : 
                                                 pasado ? '#e5e7eb' : 
                                                 'transparent';
@@ -591,7 +653,7 @@ const agendarCita = async (diaDate, hora) => {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded" style={{ backgroundColor: '#D98FA0' }}></div>
-                <span className="text-sm text-foreground">Ocupado (se ve en rosa para todos)</span>
+                <span className="text-sm text-foreground">Ocupado (rosa para todos)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 bg-muted rounded"></div>
@@ -602,9 +664,11 @@ const agendarCita = async (diaDate, hora) => {
             {/* Nota importante */}
             <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <p className="text-sm text-blue-800 dark:text-blue-300 text-center">
-                💖 Las citas se muestran como <strong>ocupadas inmediatamente</strong> para todos los usuarios.
+                💖 Las citas se muestran como <strong>ocupadas inmediatamente</strong> para todos los usuarios
                 <br />
-                📱 Recibirás confirmación automática por WhatsApp al agendar.
+                📱 Recibirás confirmación automática por WhatsApp al agendar
+                <br />
+                🔄 El calendario se actualiza automáticamente cada 30 segundos
               </p>
             </div>
           </div>

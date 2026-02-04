@@ -1,8 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import http from 'http';
-import { Server } from 'socket.io';
 import connectDB from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import reservationRoutes from './routes/reservationRoutes.js';
@@ -15,17 +13,6 @@ import cron from 'node-cron';
 dotenv.config();
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: [
-      'http://localhost:3000',
-      'https://soumaya-beauty-salon.vercel.app',
-      process.env.FRONTEND_URL
-    ].filter(Boolean),
-    methods: ['GET', 'POST']
-  }
-});
 
 // Middleware
 app.use(cors({
@@ -42,27 +29,6 @@ app.use(express.urlencoded({ extended: true }));
 // Conectar a MongoDB
 connectDB();
 
-// WebSocket para actualizaciones en tiempo real
-io.on('connection', (socket) => {
-  console.log('🔌 Nuevo cliente conectado:', socket.id);
-  
-  socket.on('nuevaReserva', (reservaData) => {
-    console.log('📢 Nueva reserva creada:', reservaData._id);
-    // Emitir a TODOS los clientes excepto al que la creó
-    socket.broadcast.emit('actualizarCalendario', reservaData);
-  });
-  
-  socket.on('reservaCancelada', (reservaData) => {
-    console.log('📢 Reserva cancelada:', reservaData._id);
-    // Emitir a TODOS los clientes
-    io.emit('liberarHorario', reservaData);
-  });
-  
-  socket.on('disconnect', () => {
-    console.log('🔌 Cliente desconectado:', socket.id);
-  });
-});
-
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/reservations', reservationRoutes);
@@ -74,7 +40,12 @@ app.get('/', (req, res) => {
     message: 'Soumaya Beauty Bar API',
     version: '1.0.0',
     status: 'online',
-    websocket: 'activo',
+    features: {
+      realtime: 'polling every 30s',
+      whatsapp: 'automatic messages',
+      calendar: 'google calendar sync',
+      reminders: 'daily at 6:30 PM'
+    },
     endpoints: {
       auth: '/api/auth',
       reservations: '/api/reservations',
@@ -89,9 +60,23 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'Soumaya Beauty Salon API',
-    websocket: io.engine.clientsCount + ' clientes conectados'
+    uptime: process.uptime()
   });
 });
+
+// Ruta para verificar variables de entorno (solo desarrollo)
+if (process.env.NODE_ENV === 'development') {
+  app.get('/env-check', (req, res) => {
+    res.json({
+      mongodb: process.env.MONGODB_URI ? '✅' : '❌',
+      jwt: process.env.JWT_SECRET ? '✅' : '❌',
+      google: process.env.GOOGLE_SERVICE_ACCOUNT_JSON ? '✅' : '❌',
+      whapi: process.env.WHAPI_TOKEN ? '✅' : '❌',
+      frontend: process.env.FRONTEND_URL ? '✅' : '❌',
+      backend: process.env.BACKEND_URL ? '✅' : '❌'
+    });
+  });
+}
 
 // Configurar cron job para recordatorios diarios a las 6:30 PM
 cron.schedule('30 18 * * *', async () => {
@@ -111,10 +96,10 @@ console.log('⏰ Cron job configurado para ejecutarse a las 6:30 PM todos los d�
 
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
   console.log(`🌐 URL: ${process.env.BACKEND_URL || `http://localhost:${PORT}`}`);
-  console.log(`📡 WebSocket activo en ws://localhost:${PORT}`);
   console.log(`📅 Sincronizado con Google Calendar`);
   console.log(`📱 WhatsApp integrado con Whapi.cloud (envío automático)`);
+  console.log(`🔄 Actualización en tiempo real: polling cada 30 segundos`);
 });

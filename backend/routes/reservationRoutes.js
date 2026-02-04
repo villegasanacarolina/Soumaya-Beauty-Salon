@@ -5,7 +5,6 @@ import {
   getUserReservations, 
   cancelReservation,
   deleteReservation,
-  syncWithGoogleCalendar,
   checkTimeSlot,
   getAllReservations
 } from '../controllers/reservationController.js';
@@ -36,8 +35,5 @@ router.put('/:id/cancel', cancelReservation);
 
 // Eliminar reserva del historial
 router.delete('/:id', deleteReservation);
-
-// Sincronizar con Google Calendar (para administración)
-router.post('/sync-calendar', syncWithGoogleCalendar);
 
 export default router;

@@ -237,6 +237,61 @@ export const getWeekAvailability = async (req, res) => {
   }
 };
 
+// OBTENER TODAS LAS RESERVAS (para calendario público)
+export const getAllReservations = async (req, res) => {
+  try {
+    // Nota: Esta ruta solo debería mostrar reservas confirmadas y futuras
+    const fechaActual = new Date().toISOString().split('T')[0];
+    
+    const reservas = await Reservation.find({
+      estado: 'confirmada',
+      fecha: { $gte: fechaActual } // Solo reservas futuras
+    }).sort({ fecha: 1, horaInicio: 1 });
+    
+    // Formatear respuesta para calendario público
+    const reservasFormateadas = reservas.map(reserva => {
+      const [year, month, day] = reserva.fecha.split('-').map(Number);
+      const fechaObj = new Date(year, month - 1, day);
+      
+      return {
+        id: reserva._id,
+        title: `${reserva.servicio} - ${reserva.nombreCliente.split(' ')[0]}`,
+        start: `${reserva.fecha}T${reserva.horaInicio}:00`,
+        end: `${reserva.fecha}T${reserva.horaFin}:00`,
+        extendedProps: {
+          servicio: reserva.servicio,
+          servicioNombre: serviceDurations[reserva.servicio]?.nombre,
+          nombreCliente: reserva.nombreCliente,
+          telefonoCliente: reserva.telefonoCliente,
+          duracion: reserva.duracion,
+          precio: reserva.precio,
+          fechaLegible: fechaObj.toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })
+        },
+        backgroundColor: '#D98FA0',
+        borderColor: '#C97B8A'
+      };
+    });
+    
+    res.json({
+      success: true,
+      count: reservas.length,
+      reservas: reservasFormateadas
+    });
+    
+  } catch (error) {
+    console.error('❌ ERROR obteniendo todas las reservas:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error obteniendo reservas'
+    });
+  }
+};
+
 // RESERVAS DEL USUARIO
 export const getUserReservations = async (req, res) => {
   try {

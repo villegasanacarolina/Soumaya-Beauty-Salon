@@ -13,9 +13,10 @@ const userSchema = new mongoose.Schema({
     unique: true,
     validate: {
       validator: function(v) {
-        return /^\+?[1-9]\d{1,14}$/.test(v);
+        // Validar exactamente 10 dígitos (formato México sin código de país)
+        return /^\d{10}$/.test(v);
       },
-      message: 'Número de teléfono inválido'
+      message: 'El teléfono debe tener exactamente 10 dígitos. Ejemplo: 5551234567'
     }
   },
   password: {

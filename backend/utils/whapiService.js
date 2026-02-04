@@ -27,41 +27,62 @@ const formatearFecha = (fecha) => {
   });
 };
 
-// Helper: Formatear teléfono para Whapi (¡CORREGIDO!)
-// WhatsApp necesita: 521234567890@s.whatsapp.net
+// ═══════════════════════════════════════════════════════════════════════════
+// Helper: Formatear teléfono para Whapi
+// ═══════════════════════════════════════════════════════════════════════════
+// FORMATO CORRECTO PARA WHATSAPP MÉXICO:
+// - La DB guarda solo 10 dígitos: 5551234567
+// - WhatsApp/Whapi necesita: 521234567890@s.whatsapp.net (código país + número)
+// - NO usar el "1" adicional después del 52 (es formato antiguo)
 const formatearTelefonoWhapi = (telefono) => {
-  console.log('📞 Teléfono original para WhatsApp:', telefono);
+  console.log('📞 ========== FORMATEANDO TELÉFONO PARA WHAPI ==========');
+  console.log('📞 Teléfono recibido:', telefono);
   
   // 1. Eliminar todo excepto números
   let numeros = telefono.replace(/\D/g, '');
-  
   console.log('📞 Solo números:', numeros);
   
-  // IMPORTANTE: Siempre tomar los últimos 10 dígitos (para México)
-  // WhatsApp y Whapi.cloud agregan automáticamente el +52
-  if (numeros.length > 10) {
+  // 2. Si tiene código de país (52 o 521), quitarlo para quedarnos con 10 dígitos
+  if (numeros.length === 12 && numeros.startsWith('52')) {
+    // Formato: 521234567890 (52 + 10 dígitos)
+    numeros = numeros.slice(2);
+    console.log('📞 Removido prefijo 52:', numeros);
+  } else if (numeros.length === 13 && numeros.startsWith('521')) {
+    // Formato antiguo: 5211234567890 (521 + 10 dígitos)
+    numeros = numeros.slice(3);
+    console.log('📞 Removido prefijo 521:', numeros);
+  } else if (numeros.length > 10) {
+    // Cualquier otro caso, tomar los últimos 10 dígitos
     numeros = numeros.slice(-10);
+    console.log('📞 Tomando últimos 10 dígitos:', numeros);
   }
   
-  // Verificar que sean exactamente 10 dígitos
+  // 3. Verificar que sean exactamente 10 dígitos
   if (numeros.length !== 10) {
-    console.error('❌ Error: Teléfono no tiene 10 dígitos:', numeros);
-    throw new Error('Teléfono debe tener 10 dígitos');
+    console.error('❌ Error: Teléfono no tiene 10 dígitos:', numeros, `(tiene ${numeros.length})`);
+    throw new Error(`Teléfono debe tener 10 dígitos. Recibido: ${numeros.length} dígitos`);
   }
   
-  console.log('📞 Teléfono formateado para Whapi (10 dígitos):', numeros);
+  // 4. Formato final para Whapi: 52 + 10 dígitos + @s.whatsapp.net
+  // NOTA: Para México, el formato correcto es 52XXXXXXXXXX (sin el 1 adicional)
+  const telefonoFormateado = `52${numeros}@s.whatsapp.net`;
   
-  // Whapi requiere: 521234567890@s.whatsapp.net (52 + 10 dígitos)
-  return `52${numeros}@s.whatsapp.net`;
+  console.log('✅ Teléfono formateado para Whapi:', telefonoFormateado);
+  console.log('📞 =====================================================');
+  
+  return telefonoFormateado;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // Función principal para enviar mensajes
+// ═══════════════════════════════════════════════════════════════════════════
 const enviarMensajeWhapi = async (telefono, mensaje) => {
   try {
     const to = formatearTelefonoWhapi(telefono);
     
-    console.log('📤 Enviando WhatsApp a:', to);
-    console.log('📝 Mensaje:', mensaje.substring(0, 100) + '...');
+    console.log('📤 ========== ENVIANDO WHATSAPP ==========');
+    console.log('📤 Destinatario:', to);
+    console.log('📝 Mensaje (primeros 100 chars):', mensaje.substring(0, 100) + '...');
     
     const response = await axios.post(
       `${WHAPI_BASE_URL}/messages/text`,
@@ -79,13 +100,17 @@ const enviarMensajeWhapi = async (telefono, mensaje) => {
     );
     
     console.log('✅ WhatsApp enviado exitosamente');
+    console.log('📤 Response:', JSON.stringify(response.data, null, 2));
+    console.log('📤 ==========================================');
+    
     return { success: true, data: response.data };
     
   } catch (error) {
-    console.error('❌ ERROR enviando WhatsApp:');
-    console.error('Telefono:', telefono);
-    console.error('Error:', error.response?.data || error.message);
-    console.error('Status:', error.response?.status);
+    console.error('❌ ========== ERROR ENVIANDO WHATSAPP ==========');
+    console.error('📱 Teléfono original:', telefono);
+    console.error('❌ Error:', error.response?.data || error.message);
+    console.error('❌ Status:', error.response?.status);
+    console.error('❌ =============================================');
     
     return { 
       success: false, 
@@ -94,7 +119,9 @@ const enviarMensajeWhapi = async (telefono, mensaje) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // 1. CONFIRMACIÓN AL CLIENTE
+// ═══════════════════════════════════════════════════════════════════════════
 export const enviarConfirmacionCita = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
@@ -140,7 +167,9 @@ _Responder a este mensaje con SÍ o NO_`;
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // 2. NOTIFICACIÓN AL SALÓN
+// ═══════════════════════════════════════════════════════════════════════════
 export const notificarSalonNuevaCita = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
@@ -179,7 +208,9 @@ export const notificarSalonNuevaCita = async (reserva) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // 3. RECORDATORIO (para cron job)
+// ═══════════════════════════════════════════════════════════════════════════
 export const enviarRecordatorio = async (telefono, nombreCliente, servicio, fecha, hora) => {
   try {
     const info = serviceDurations[servicio];
@@ -224,7 +255,9 @@ _Responder a este mensaje con SÍ o NO_`;
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // 4. CONFIRMACIÓN DE CANCELACIÓN AL CLIENTE
+// ═══════════════════════════════════════════════════════════════════════════
 export const enviarMensajeCancelacionConfirmada = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
@@ -264,7 +297,9 @@ Tu cita ha sido cancelada exitosamente:
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // 5. NOTIFICACIÓN DE CANCELACIÓN AL SALÓN
+// ═══════════════════════════════════════════════════════════════════════════
 export const notificarSalonCancelacion = async (reserva) => {
   try {
     const info = serviceDurations[reserva.servicio];
@@ -302,21 +337,34 @@ export const notificarSalonCancelacion = async (reserva) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
 // 6. PROCESAR MENSAJES ENTRANTES (para webhook)
+// ═══════════════════════════════════════════════════════════════════════════
+// Cuando llega un mensaje de WhatsApp, viene en formato: 521234567890@s.whatsapp.net
+// Necesitamos extraer solo los 10 dígitos para buscar en la DB
 export const procesarMensajeEntrante = (mensaje) => {
   try {
     const from = mensaje.from; // Formato: 521234567890@s.whatsapp.net
     const texto = mensaje.text?.body?.toLowerCase().trim() || '';
     
-    console.log('📨 Mensaje entrante de:', from);
+    console.log('📨 ========== PROCESANDO MENSAJE ENTRANTE ==========');
+    console.log('📨 From completo:', from);
     console.log('📝 Texto:', texto);
     
     // Extraer solo números del remitente
     const numeros = from.replace(/\D/g, '');
+    console.log('📞 Solo números:', numeros);
     
-    // Tomar solo los últimos 10 dígitos
+    // Extraer los últimos 10 dígitos (quitar el código de país 52)
     let telefono = numeros;
-    if (numeros.length > 10) {
+    if (numeros.length === 12 && numeros.startsWith('52')) {
+      // Formato normal: 521234567890
+      telefono = numeros.slice(2);
+    } else if (numeros.length === 13 && numeros.startsWith('521')) {
+      // Formato con 1 adicional: 5211234567890
+      telefono = numeros.slice(3);
+    } else if (numeros.length > 10) {
+      // Cualquier otro caso, tomar los últimos 10
       telefono = numeros.slice(-10);
     }
     
@@ -330,6 +378,10 @@ export const procesarMensajeEntrante = (mensaje) => {
     const esNegativo = ['no', 'mantener', 'seguir', 'confirmar'].some(palabra => 
       texto.includes(palabra)
     );
+    
+    console.log('✅ ¿Es afirmativo (cancelar)?:', esAfirmativo);
+    console.log('❌ ¿Es negativo (mantener)?:', esNegativo);
+    console.log('📨 =====================================================');
     
     return {
       telefono,

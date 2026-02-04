@@ -12,30 +12,45 @@ import { eliminarEventoCalendar } from '../utils/googleCalendarService.js';
 
 const buscarReservaPendiente = async (telefono) => {
   try {
-    console.log('🔍 Buscando reserva pendiente para teléfono:', telefono);
+    console.log('🔍 ========== BUSCANDO RESERVA PENDIENTE ==========');
+    console.log('🔍 Teléfono recibido:', telefono);
     
     // Asegurar que el teléfono tenga exactamente 10 dígitos
-    const telefono10 = telefono.replace(/\D/g, '').slice(-10);
+    let telefono10 = telefono.replace(/\D/g, '');
+    
+    // Si tiene código de país, quitarlo
+    if (telefono10.length === 12 && telefono10.startsWith('52')) {
+      telefono10 = telefono10.slice(2);
+    } else if (telefono10.length === 13 && telefono10.startsWith('521')) {
+      telefono10 = telefono10.slice(3);
+    } else if (telefono10.length > 10) {
+      telefono10 = telefono10.slice(-10);
+    }
+    
+    console.log('🔍 Teléfono normalizado (10 dígitos):', telefono10);
     
     if (telefono10.length !== 10) {
-      console.log('⚠️ Teléfono no válido (no 10 dígitos):', telefono);
+      console.log('⚠️ Teléfono no válido (no tiene 10 dígitos):', telefono10);
       return null;
     }
 
     // Buscar la reserva confirmada más reciente de este teléfono
     // que esté esperando respuesta
+    // NOTA: En la DB guardamos solo 10 dígitos, así que buscamos directamente
     const reservas = await Reservation.find({
-      telefonoCliente: { $regex: telefono10 + '$' }, // Buscar teléfono que termine con estos dígitos
+      telefonoCliente: telefono10, // Búsqueda exacta de 10 dígitos
       estado: 'confirmada',
       esperandoRespuesta: true
     }).sort({ createdAt: -1 }).limit(1);
 
     if (reservas.length === 0) {
       console.log('ℹ️ No hay reservas pendientes para:', telefono10);
+      console.log('🔍 =============================================');
       return null;
     }
 
     console.log('✅ Reserva encontrada:', reservas[0]._id);
+    console.log('🔍 =============================================');
     return reservas[0];
   } catch (error) {
     console.error('❌ Error buscando reserva:', error);
@@ -46,7 +61,7 @@ const buscarReservaPendiente = async (telefono) => {
 export const handleWhapiWebhook = async (req, res) => {
   console.log('');
   console.log('📨 ========== WEBHOOK WHAPI RECIBIDO ==========');
-  console.log('Timestamp:', new Date().toISOString());
+  console.log('📨 Timestamp:', new Date().toISOString());
 
   try {
     // Whapi envía los mensajes en req.body.messages
@@ -62,19 +77,20 @@ export const handleWhapiWebhook = async (req, res) => {
     // Procesar cada mensaje
     for (const mensaje of messages) {
       console.log('');
+      console.log('─────────────────────────────────────────────');
       console.log('─── Procesando mensaje ───');
       
-      const datos = await procesarMensajeEntrante(mensaje);
+      const datos = procesarMensajeEntrante(mensaje);
       
       if (!datos) {
         console.log('⚠️ No se pudo procesar el mensaje');
         continue;
       }
 
-      console.log('📱 Teléfono (10 dígitos):', datos.telefono);
-      console.log('📝 Texto:', datos.texto);
-      console.log('✅ ¿Es Sí?:', datos.esAfirmativo);
-      console.log('❌ ¿Es No?:', datos.esNegativo);
+      console.log('📱 Teléfono extraído (10 dígitos):', datos.telefono);
+      console.log('📝 Texto del mensaje:', datos.texto);
+      console.log('✅ ¿Quiere cancelar (Sí)?:', datos.esAfirmativo);
+      console.log('❌ ¿Quiere mantener (No)?:', datos.esNegativo);
 
       // Buscar reserva pendiente de respuesta
       const reserva = await buscarReservaPendiente(datos.telefono);
@@ -85,22 +101,25 @@ export const handleWhapiWebhook = async (req, res) => {
         continue;
       }
 
-      console.log('🎯 Reserva encontrada:', reserva._id);
+      console.log('🎯 Reserva encontrada:');
+      console.log('   🆔 ID:', reserva._id);
       console.log('   👤 Cliente:', reserva.nombreCliente);
+      console.log('   📱 Teléfono en DB:', reserva.telefonoCliente);
       console.log('   💅 Servicio:', reserva.servicio);
       console.log('   📅 Fecha:', reserva.fecha);
       console.log('   ⏰ Hora:', reserva.horaInicio);
 
       // ─── RESPUESTA: SÍ (quiere cancelar) ───────────────────────────────
       if (datos.esAfirmativo) {
-        console.log('🔴 Cliente confirmó CANCELACIÓN');
+        console.log('');
+        console.log('🔴 ========== CANCELANDO CITA ==========');
 
         // Cancelar en MongoDB
         reserva.estado = 'cancelada';
         reserva.esperandoRespuesta = false;
         await reserva.save();
 
-        console.log('✅ Reserva cancelada en DB');
+        console.log('✅ Reserva cancelada en MongoDB');
 
         // Eliminar de Google Calendar
         if (reserva.googleCalendarEventId) {
@@ -127,15 +146,20 @@ export const handleWhapiWebhook = async (req, res) => {
         } catch (e) {
           console.error('⚠️ Error enviando confirmación:', e.message);
         }
+        
+        console.log('🔴 ========================================');
       }
       // ─── RESPUESTA: NO (mantiene la cita) ─────────────────────────────
       else if (datos.esNegativo) {
-        console.log('✅ Cliente confirmó que MANTIENE la cita');
+        console.log('');
+        console.log('✅ ========== MANTENIENDO CITA ==========');
 
         reserva.esperandoRespuesta = false;
         await reserva.save();
 
-        console.log('✅ Estado actualizado');
+        console.log('✅ Cliente confirmó que MANTIENE la cita');
+        console.log('✅ Estado actualizado en MongoDB');
+        console.log('✅ ========================================');
         
         // Opcional: Enviar mensaje de confirmación de mantenimiento
         // await enviarMensajeWhapi(datos.telefono, '✅ Perfecto, mantendremos tu cita. ¡Te esperamos!');
@@ -143,12 +167,14 @@ export const handleWhapiWebhook = async (req, res) => {
       // ─── RESPUESTA NO RECONOCIDA ───────────────────────────────────────
       else {
         console.log('⚠️ Respuesta no reconocida, se ignora');
+        console.log('⚠️ Texto recibido:', datos.texto);
         // Opcional: Enviar mensaje de ayuda
         // await enviarMensajeWhapi(datos.telefono, 'Por favor responde SÍ para cancelar o NO para mantener tu cita.');
       }
     }
 
-    console.log('==========================================');
+    console.log('');
+    console.log('📨 ========== FIN WEBHOOK ==========');
     console.log('');
     res.status(200).json({ success: true, processed: messages.length });
 

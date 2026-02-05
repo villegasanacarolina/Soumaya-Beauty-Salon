@@ -38,9 +38,9 @@ export default function ServicioDetalle({ servicio }) {
   ];
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ paddingTop: '250px' }}>
       {/* Breadcrumb */}
-      <div className="max-w-6xl mx-auto px-4 pt-8">
+      <div className="max-w-6xl mx-auto px-4">
         <Breadcrumb items={breadcrumbItems} />
         
         {/* Botón regresar */}

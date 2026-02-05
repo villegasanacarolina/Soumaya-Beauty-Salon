@@ -136,7 +136,7 @@ export const enviarConfirmacionCita = async (reserva) => {
     const fechaFormateada = formatearFecha(reserva.fecha);
     
     const mensaje = 
-`🌸 *SOUMAYA BEAUTY BAR* 🌸
+`🌸 *SOUMAYA BEAUTY SALON* 🌸
 
 Hola ${reserva.nombreCliente}!
 
